@@ -1,0 +1,561 @@
+{
+ "now": "2026-10-16T03:00:00Z",
+ "note": "now = Fri 2026-10-16 12:00 JST. expect: intent + subset of params that must match.",
+ "queries": [
+  {
+   "q": "下週有什麼音番",
+   "intent": "music_tv",
+   "params": {
+    "genre": "music_tv",
+    "date_range": {
+     "from": "2026-10-19",
+     "to": "2026-10-25"
+    }
+   }
+  },
+  {
+   "q": "今週の音楽番組",
+   "intent": "music_tv",
+   "params": {
+    "date_range": {
+     "from": "2026-10-12",
+     "to": "2026-10-18"
+    }
+   }
+  },
+  {
+   "q": "11月 音番 森田ひかる",
+   "intent": "music_tv",
+   "params": {
+    "member": "50",
+    "date_range": {
+     "from": "2026-11-01",
+     "to": "2026-11-30"
+    }
+   }
+  },
+  {
+   "q": "今天的行程",
+   "intent": "schedule",
+   "params": {
+    "date": "2026-10-16"
+   }
+  },
+  {
+   "q": "明天有什麼行程",
+   "intent": "schedule",
+   "params": {
+    "date": "2026-10-17"
+   }
+  },
+  {
+   "q": "這週行程",
+   "intent": "schedule",
+   "params": {
+    "date_range": {
+     "from": "2026-10-12",
+     "to": "2026-10-18"
+    }
+   }
+  },
+  {
+   "q": "下個月スケジュール",
+   "intent": "schedule",
+   "params": {
+    "date_range": {
+     "from": "2026-11-01",
+     "to": "2026-11-30"
+    }
+   }
+  },
+  {
+   "q": "山崎天 這週上什麼電視",
+   "intent": "schedule",
+   "params": {
+    "member": "51",
+    "label": "テレビ"
+   }
+  },
+  {
+   "q": "今週のラジオ",
+   "intent": "schedule",
+   "params": {
+    "label": "ラジオ"
+   }
+  },
+  {
+   "q": "10/20 有什麼活動",
+   "intent": "schedule",
+   "params": {
+    "date": "2026-10-20"
+   }
+  },
+  {
+   "q": "京都見面會第3部幾點",
+   "intent": "meet_greet",
+   "params": {
+    "city": "京都",
+    "part": 3
+   }
+  },
+  {
+   "q": "16單 京都 ミーグリ 第三部 何時から",
+   "intent": "meet_greet",
+   "params": {
+    "single": 16,
+    "city": "京都",
+    "part": 3
+   }
+  },
+  {
+   "q": "線上見面會有哪些",
+   "intent": "meet_greet",
+   "params": {
+    "city": "オンライン"
+   }
+  },
+  {
+   "q": "全国握手会 大阪 2部",
+   "intent": "meet_greet",
+   "params": {
+    "city": "大阪",
+    "part": 2
+   }
+  },
+  {
+   "q": "石森璃花 最新blog",
+   "intent": "blog",
+   "params": {
+    "member_id": "59"
+   }
+  },
+  {
+   "q": "谷口爱季的部落格",
+   "intent": "blog",
+   "params": {
+    "member_id": "63"
+   }
+  },
+  {
+   "q": "中島優月のブログ",
+   "intent": "blog",
+   "params": {
+    "member_id": "64"
+   }
+  },
+  {
+   "q": "遠藤 blog",
+   "intent": "blog",
+   "ambiguous": true
+  },
+  {
+   "q": "16單C位是誰",
+   "intent": "center",
+   "params": {
+    "single": 16
+   }
+  },
+  {
+   "q": "第15張單曲的センター",
+   "intent": "center",
+   "params": {
+    "single": 15
+   }
+  },
+  {
+   "q": "12th シングル フォーメーション",
+   "intent": "formation",
+   "params": {
+    "single": 12
+   }
+  },
+  {
+   "q": "十六單站位",
+   "intent": "formation",
+   "params": {
+    "single": 16
+   }
+  },
+  {
+   "q": "最新單曲選拔",
+   "intent": "formation",
+   "params": {}
+  },
+  {
+   "q": "周邊 タオル 還有貨嗎",
+   "intent": "store_stock",
+   "params": {
+    "keyword": "タオル"
+   }
+  },
+  {
+   "q": "生写真 在庫ありますか",
+   "intent": "store_stock",
+   "params": {
+    "keyword": "生写真"
+   }
+  },
+  {
+   "q": "グッズ Tシャツ",
+   "intent": "store",
+   "params": {
+    "keyword": "Tシャツ"
+   }
+  },
+  {
+   "q": "10月新聞",
+   "intent": "news",
+   "params": {
+    "dy": "202610"
+   }
+  },
+  {
+   "q": "最新消息",
+   "intent": "news",
+   "params": {}
+  },
+  {
+   "q": "上個月的グッズ新聞",
+   "intent": "news",
+   "params": {
+    "dy": "202609",
+    "category": "goods"
+   }
+  },
+  {
+   "q": "16單 收錄曲目",
+   "intent": "discography",
+   "params": {
+    "single": 16
+   }
+  },
+  {
+   "q": "石森璃花的問候卡",
+   "intent": "greeting",
+   "params": {
+    "member_id": "59"
+   }
+  },
+  {
+   "q": "有哪些演唱會特設頁",
+   "intent": "live",
+   "params": {
+    "when": "upcoming"
+   }
+  },
+  {
+   "q": "京都見面會第3部幾點",
+   "intent": "meet_greet",
+   "params": {
+    "city": "京都",
+    "part": 3,
+    "when": "upcoming",
+    "from": "2026-10-16"
+   }
+  },
+  {
+   "q": "見面會",
+   "intent": "meet_greet",
+   "params": {
+    "when": "upcoming"
+   }
+  },
+  {
+   "q": "行程",
+   "intent": "schedule",
+   "params": {
+    "when": "upcoming",
+    "date_range": {
+     "from": "2026-10-16",
+     "to": "2026-11-15"
+    }
+   }
+  },
+  {
+   "q": "音番",
+   "intent": "music_tv",
+   "params": {
+    "when": "upcoming",
+    "date_range": {
+     "from": "2026-10-16"
+    }
+   }
+  },
+  {
+   "q": "上次京都見面會第3部幾點",
+   "intent": "meet_greet",
+   "params": {
+    "city": "京都",
+    "part": 3,
+    "when": "past_allowed"
+   }
+  },
+  {
+   "q": "13單 京都 見面會 第3部",
+   "intent": "meet_greet",
+   "params": {
+    "single": 13,
+    "city": "京都",
+    "part": 3,
+    "when": "past_allowed"
+   }
+  },
+  {
+   "q": "去年的握手會",
+   "intent": "meet_greet",
+   "params": {
+    "when": "past_allowed"
+   }
+  },
+  {
+   "q": "2026/01/31 行程",
+   "intent": "schedule",
+   "params": {
+    "date": "2026-01-31",
+    "when": "past_allowed"
+   }
+  },
+  {
+   "q": "昨天的音番",
+   "intent": "music_tv",
+   "params": {
+    "date": "2026-10-15",
+    "when": "past_allowed"
+   }
+  },
+  {
+   "q": "大阪演唱會",
+   "intent": "live",
+   "params": {
+    "city": "大阪",
+    "when": "upcoming",
+    "from": "2026-10-16",
+    "live_type": "solo"
+   }
+  },
+  {
+   "q": "東京ドーム ライブ いつ",
+   "intent": "live",
+   "params": {
+    "city": "東京",
+    "when": "upcoming",
+    "live_type": "solo"
+   }
+  },
+  {
+   "q": "福岡公演",
+   "intent": "live",
+   "params": {
+    "city": "福岡",
+    "when": "upcoming",
+    "live_type": "solo"
+   }
+  },
+  {
+   "q": "去年的大阪演唱會",
+   "intent": "live",
+   "params": {
+    "city": "大阪",
+    "when": "past_allowed",
+    "live_type": "solo"
+   }
+  },
+  {
+   "q": "上次名古屋ツアー",
+   "intent": "live",
+   "params": {
+    "city": "名古屋",
+    "when": "past_allowed",
+    "live_type": "solo"
+   }
+  },
+  {
+   "q": "大阪演唱會",
+   "intent": "live",
+   "params": {
+    "live_type": "solo",
+    "city": "大阪",
+    "when": "upcoming"
+   }
+  },
+  {
+   "q": "大阪音樂節",
+   "intent": "live",
+   "params": {
+    "live_type": "festival",
+    "city": "大阪",
+    "when": "upcoming"
+   }
+  },
+  {
+   "q": "ROCK IN JAPAN 什麼時候",
+   "intent": "live",
+   "params": {
+    "live_type": "festival",
+    "when": "upcoming"
+   }
+  },
+  {
+   "q": "今年有哪些フェス",
+   "intent": "live",
+   "params": {
+    "live_type": "festival"
+   }
+  },
+  {
+   "q": "去年的CDJ",
+   "intent": "live",
+   "params": {
+    "live_type": "festival",
+    "when": "past_allowed"
+   }
+  },
+  {
+   "q": "BACKS LIVE 幾號",
+   "intent": "live",
+   "params": {
+    "live_type": "solo",
+    "when": "upcoming"
+   }
+  },
+  {
+   "q": "ツアー 福岡",
+   "intent": "live",
+   "params": {
+    "live_type": "solo",
+    "city": "福岡"
+   }
+  },
+  {
+   "q": "京セラ ライブ",
+   "intent": "live",
+   "params": {
+    "live_type": "solo",
+    "venue": "京セラドーム大阪",
+    "city": "大阪",
+    "when": "upcoming"
+   }
+  },
+  {
+   "q": "大阪城ホール 公演",
+   "intent": "live",
+   "params": {
+    "venue": "大阪城ホール",
+    "city": "大阪"
+   }
+  },
+  {
+   "q": "ぴあアリーナ 什麼時候",
+   "intent": "live",
+   "params": {
+    "venue": "ぴあアリーナMM",
+    "city": "横浜"
+   }
+  },
+  {
+   "q": "ZOZOマリン",
+   "intent": "live",
+   "params": {
+    "venue": "ZOZOマリンスタジアム",
+    "city": "千葉"
+   }
+  },
+  {
+   "q": "横浜 演唱會",
+   "intent": "live",
+   "params": {
+    "live_type": "solo",
+    "city": "横浜"
+   }
+  },
+  {
+   "q": "去年京セラドームの公演",
+   "intent": "live",
+   "params": {
+    "venue": "京セラドーム大阪",
+    "when": "past_allowed"
+   }
+  },
+  {
+   "q": "你好",
+   "intent": null,
+   "ambiguous": true
+  }
+ ],
+ "live_type_cases": [
+  [
+   "「OSAKA GIGANTIC MUSIC FESTIVAL 2026 -THANKS 10TH GIGA-」",
+   "festival"
+  ],
+  [
+   "ROCK IN JAPAN FESTIVAL 2026",
+   "festival"
+  ],
+  [
+   "「COUNTDOWN JAPAN 26/27」",
+   "festival"
+  ],
+  [
+   "TOKYO IDOL FESTIVAL 2026",
+   "festival"
+  ],
+  [
+   "ARABAKI ROCK FEST.26",
+   "festival"
+  ],
+  [
+   "櫻坂46「16th Single BACKS LIVE!!」",
+   "solo"
+  ],
+  [
+   "Sakurazaka46 ARENA TOUR 2026 -What’s lonesome?-",
+   "solo"
+  ],
+  [
+   "櫻坂46「6th YEAR ANNIVERSARY LIVE」",
+   "solo"
+  ],
+  [
+   "櫻坂46「四期生LIVE」",
+   "solo"
+  ],
+  [
+   "某ライブ",
+   "unknown"
+  ],
+  [
+   "櫻坂46「Buddies感謝祭 2025 EX」",
+   "solo"
+  ],
+  [
+   "Buddies感謝祭",
+   "solo"
+  ],
+  [
+   "〇〇夏祭り",
+   "unknown"
+  ]
+ ],
+ "venue_cases": [
+  [
+   "### 会場・日程\n\nぴあアリーナMM\n\n2026年12月15日",
+   "ぴあアリーナMM",
+   "横浜"
+  ],
+  [
+   "### 会場\n\nZOZOマリンスタジアム",
+   "ZOZOマリンスタジアム",
+   "千葉"
+  ],
+  [
+   "【会場】\n京セラドーム大阪",
+   "京セラドーム大阪",
+   "大阪"
+  ],
+  [
+   "【会場】\nAsueアリーナ大阪",
+   "Asueアリーナ大阪",
+   "大阪"
+  ]
+ ]
+}

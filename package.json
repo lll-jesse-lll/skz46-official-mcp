@@ -1,0 +1,36 @@
+{
+  "name": "skz46-official-mcp",
+  "version": "0.4.1",
+  "description": "Zero-dependency stdio MCP server for Sakurazaka46 (櫻坂46) official-site public data: news, blogs, schedule, formation, discography, MEET&GREET, greeting cards, special pages, goods store.",
+  "bin": {
+    "skz46-official-mcp": "server/index.js"
+  },
+  "main": "server/index.js",
+  "files": [
+    "server/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test/smoke.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "sakurazaka46",
+    "櫻坂46"
+  ],
+  "author": "Jesse Lai",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lll-jesse-lll/skz46-official-mcp.git"
+  },
+  "homepage": "https://github.com/lll-jesse-lll/skz46-official-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/lll-jesse-lll/skz46-official-mcp/issues"
+  }
+}

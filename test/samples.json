@@ -1,0 +1,763 @@
+{
+  "list_news": {
+    "total": 12,
+    "offset": 0,
+    "items": [
+      {
+        "kind": "news",
+        "id": "R00638",
+        "title": "16thシングル表題曲『愛MUST BE -Dance Practice-』公開！",
+        "caption": null,
+        "url": "https://sakurazaka46.com/s/s46/news/detail/R00638?ima=0000",
+        "published_at": "2026-10-15T21:00:00+09:00",
+        "pubdate": "2026/10/15 21:00:00",
+        "category": "release",
+        "category_label": "リリース",
+        "tags": null,
+        "thumbnail": null,
+        "content": "<span>16thシングル表題曲『愛MUST BE』のダンスプラクティス動画を</span><span>櫻坂46 OFFICIAL YouTube CHANNELにて公開しました！<br />是非ご覧ください！<br /><br />■櫻坂46『愛MUST BE -Dance Practice-』</span><span><br /><iframe width=\"560\" height=\"315\" src=\"//www.youtube.com/embed/5_ump_XVOds\" frameborder=\"0\" allowfullscreen=\"allowfullscreen\"></iframe><br /></span>"
+      },
+      {
+        "kind": "news",
+        "id": "R00637",
+        "title": "LIVE Blu-ray BOX『SAKURAZAKA46 BACKS LIVE!! BOX 2024-2026』発売決定！",
+        "caption": null,
+        "url": "https://sakurazaka46.com/s/s46/news/detail/R00637?ima=0000",
+        "published_at": "2026-10-14T21:00:00+09:00",
+        "pubdate": "2026/10/14 21:00:00",
+        "category": "release",
+        "category_label": "リリース",
+        "tags": null,
+        "thumbnail": null,
+        "content": "<p>2027年3月17日(水)にLIVE Blu-ray BOX『SAKURAZAKA46 BACKS LIVE!! BOX 2024-2026』の発売が決定しました！<br />数多くの物語が生まれた&rdquo;BACKS LIVE!!\"を堪能できるスペシャルな商品となっております！<br />予約受注のため、お早めにご予約ください！<br /><br /><a href=\"https://sakurazaka46.lnk.to/BACKSLIVEBOX_2024-2026_PKG\">ソニーミュージックショップはコチラ</a></p><p><br />＜SAKURAZAKA46 BACKS LIVE!! BOX 2024-2026＞<br />発売日:2027年3月17日(水)<br />ご予約対象期間：2026年10月14日(水)21:00 ～ 2026年12月17日(木)23:59まで<br /><br />豪華プレゼントBOX仕様<br />7Blu-ray+BACKSフォーメーションアーティストフォト・アクリルスタンド7種+フォトブックレット<br />完全生産限定盤(ソニーミュージックショップ) / SRX7-70～77 / ￥46,000 (tax in)</p>"
+      }
+    ],
+    "next": null
+  },
+  "list_blog_posts": {
+    "total": 201,
+    "offset": 0,
+    "items": [
+      {
+        "kind": "blog",
+        "id": "71377",
+        "title": "あか、202",
+        "url": "https://sakurazaka46.com/s/s46/diary/detail/71377?ima=0000",
+        "published_at": "2026-10-13T21:47:30+09:00",
+        "member_id": "59",
+        "member_name": "石森 璃花",
+        "thumbnail": "https://sakurazaka46.com/files/14/diary/s46/blog/moblog/202610/mobVUyhi5.jpg"
+      },
+      {
+        "kind": "blog",
+        "id": "71346",
+        "title": "たべたい？、201",
+        "url": "https://sakurazaka46.com/s/s46/diary/detail/71346?ima=0000",
+        "published_at": "2026-10-11T18:45:50+09:00",
+        "member_id": "59",
+        "member_name": "石森 璃花",
+        "thumbnail": "https://sakurazaka46.com/files/14/diary/s46/blog/moblog/202610/mobyQbnoM.jpg"
+      }
+    ],
+    "next": [
+      {
+        "tool": "get_blog_post",
+        "params": {
+          "id": "71377"
+        },
+        "why": "read the post"
+      },
+      {
+        "tool": "get_blog_post",
+        "params": {
+          "id": "71346"
+        },
+        "why": "read the post"
+      },
+      {
+        "tool": "get_blog_post",
+        "params": {
+          "id": "71218"
+        },
+        "why": "read the post"
+      }
+    ]
+  },
+  "list_meet_greet_events": {
+    "total": 30,
+    "items": [
+      {
+        "code": "71293",
+        "date": "2026-12-27",
+        "title": "16th Single『愛MUST BE』 CD購入者スペシャル応募抽選企画『オンラインミート＆グリート（個別トーク会）』",
+        "category": "オンライン",
+        "category_code": "online",
+        "url": "https://sakurazaka46.com/s/s46/diary/detail/71293?ima=0000&cd=event_page",
+        "image": null
+      },
+      {
+        "code": "71292",
+        "date": "2026-12-20",
+        "title": "16th Single『愛MUST BE』 CD購入者スペシャル応募抽選企画『リアルミート＆グリート（個別トーク会）』",
+        "category": "個別トーク会",
+        "category_code": "kobetsu_talk",
+        "url": "https://sakurazaka46.com/s/s46/diary/detail/71292?ima=0000&cd=event_page",
+        "image": null
+      }
+    ],
+    "next": [
+      {
+        "tool": "get_meet_greet_event",
+        "params": {
+          "code": "71293"
+        },
+        "why": "session times"
+      },
+      {
+        "tool": "get_meet_greet_event",
+        "params": {
+          "code": "71292"
+        },
+        "why": "session times"
+      },
+      {
+        "tool": "get_meet_greet_event",
+        "params": {
+          "code": "71291"
+        },
+        "why": "session times"
+      }
+    ]
+  },
+  "list_greeting_cards": {
+    "total": 1,
+    "items": [
+      {
+        "member_id": "59",
+        "name": "石森 璃花",
+        "name_kana": "いしもり りか",
+        "avatar": "https://sakurazaka46.com/images/14/403/298c88eac80d3660c0bd35300b254/600_600_102400.jpg",
+        "card": "https://sakurazaka46.com/images/14/f83/898f0a14620e91cf9bda5935a3de0.jpg",
+        "cheki": "https://sakurazaka46.com/images/14/f83/898f0a14620e91cf9bda5935a3de0-01.jpg"
+      }
+    ],
+    "next": null
+  },
+  "get_schedule": {
+    "month": "2026-10",
+    "date": null,
+    "total": 87,
+    "items": [
+      {
+        "date": "2026-10-01",
+        "start_time": "23:15",
+        "end_time": null,
+        "title": "テレビ朝日「アメトーーク！」",
+        "category": "media",
+        "category_label": "テレビ",
+        "members": [
+          {
+            "member_id": "64",
+            "name": "中嶋 優月"
+          }
+        ],
+        "description": "テレビ朝日「アメトーーク！」公式ホームページはコチラ",
+        "sessions": null,
+        "links": [
+          "https://www.tv-asahi.co.jp/ametalk/"
+        ],
+        "url": "https://sakurazaka46.com/s/s46/media/list?ima=0000&dy=20261001"
+      },
+      {
+        "date": "2026-10-01",
+        "start_time": "25:56",
+        "end_time": null,
+        "title": "テレビ朝日「サクラミーツ」",
+        "category": "media",
+        "category_label": "テレビ",
+        "members": [
+          {
+            "member_id": "55",
+            "name": "大沼 晶保"
+          },
+          {
+            "member_id": "57",
+            "name": "増本 綺良"
+          },
+          {
+            "member_id": "62",
+            "name": "小島 凪紗"
+          },
+          {
+            "member_id": "63",
+            "name": "谷口 愛季"
+          },
+          {
+            "member_id": "64",
+            "name": "中嶋 優月"
+          }
+        ],
+        "description": "テレビ朝日「サクラミーツ」公式Xはコチラ\n※大沼晶保、増本綺良、小島凪紗、谷口愛季、中嶋優月がレギュラー出演し、他メンバーの出演は公式Xをご確認ください。",
+        "sessions": null,
+        "links": [
+          "https://twitter.com/sakura__meets"
+        ],
+        "url": "https://sakurazaka46.com/s/s46/media/list?ima=0000&dy=20261001"
+      }
+    ],
+    "next": null
+  },
+  "get_formation": {
+    "kind": "single",
+    "single_number": 16,
+    "album_number": null,
+    "title": "愛MUST BE",
+    "release_date": "2026-10-14",
+    "rows": {
+      "third": [
+        {
+          "member_id": "67",
+          "name": "村井優"
+        },
+        {
+          "member_id": "65",
+          "name": "的野美青"
+        },
+        {
+          "member_id": "70",
+          "name": "浅井恋乃未"
+        },
+        {
+          "member_id": "48",
+          "name": "松田里奈"
+        },
+        {
+          "member_id": "64",
+          "name": "中嶋優月"
+        },
+        {
+          "member_id": "68",
+          "name": "村山美羽"
+        },
+        {
+          "member_id": "66",
+          "name": "向井純葉"
+        }
+      ],
+      "second": [
+        {
+          "member_id": "50",
+          "name": "森田ひかる"
+        },
+        {
+          "member_id": "51",
+          "name": "山﨑天"
+        },
+        {
+          "member_id": "69",
+          "name": "山下瞳月"
+        },
+        {
+          "member_id": "58",
+          "name": "守屋麗奈"
+        },
+        {
+          "member_id": "47",
+          "name": "藤吉夏鈴"
+        },
+        {
+          "member_id": "54",
+          "name": "大園玲"
+        }
+      ],
+      "front": [
+        {
+          "member_id": "46",
+          "name": "田村保乃"
+        },
+        {
+          "member_id": "63",
+          "name": "谷口愛季"
+        },
+        {
+          "member_id": "77",
+          "name": "山川宇衣"
+        }
+      ]
+    },
+    "discography_code": "SRCL-13890",
+    "discography_codes": [
+      "SRCL-13890",
+      "SRCL-13892",
+      "SRCL-13894",
+      "SRCL-13896",
+      "SRCL-13898"
+    ],
+    "note": "formation page jacket links (SRCL-13750, SRCL-13752, SRCL-13754, SRCL-13756, SRCL-13758) were wrong; codes resolved from official discography list",
+    "source": "https://sakurazaka46.com/s/s46/page/formation?ima=0000",
+    "next": [
+      {
+        "tool": "get_discography",
+        "params": {
+          "code": "SRCL-13890"
+        },
+        "why": "track list"
+      }
+    ]
+  },
+  "get_blog_post": {
+    "id": "71404",
+    "title": "#436 うたコン🤍",
+    "member_id": "48",
+    "member_name": "松田 里奈",
+    "published_at": "2026-10-15T17:27:00+09:00",
+    "url": "https://sakurazaka46.com/s/s46/diary/detail/71404?ima=0000&cd=blog",
+    "body_text": "やっほー！\n\n櫻坂46 二期生 宮崎県出身\nまつりちゃんこと松田里奈です。\n\nブログ開いていただきありがとうございます。\n\n10月13日(火)\n\n｢うたコン｣\n\n初披露ありがとうございました！\n\n大好きな生演奏でのパフォーマンス！かっこよかったな〜！\n\nそして｢愛MUST BE｣初披露だけでなく、天ちゃんと\n\nKiroroさんの｢Best Friend｣も披露させていただきました！！\n\nお話をいた…",
+    "images": [
+      "https://sakurazaka46.com/files/14/diary/s46/blog/moblog/202610/mobbBltZM.jpg",
+      "https://sakurazaka46.com/files/14/diary/s46/blog/moblog/202610/mobSxBrul.jpg",
+      "https://sakurazaka46.com/files/14/diary/s46/blog/moblog/202610/mobvxYTWC.jpg",
+      "https://sakurazaka46.com/files/14/diary/s46/blog/moblog/202610/mob1dswiS.jpg",
+      "https://sakurazaka46.com/files/14/diary/s46/blog/moblog/202610/mob3kqQ9x.jpg"
+    ],
+    "next": null
+  },
+  "list_discography": {
+    "total": 130,
+    "items": [
+      {
+        "code": "SRCL-13890",
+        "title": "愛MUST BE【初回仕様限定盤 TYPE-A】",
+        "type": "SINGLE",
+        "release_date": "2026-10-14",
+        "price_text": "2,000円 (税込)",
+        "jacket": "https://sakurazaka46.com/images/14/82b/2ac3d4fe35453cd49605181d95312/500_320_102400.jpg",
+        "url": "https://sakurazaka46.com/s/s46/discography/SRCL-13890?ima=0000"
+      },
+      {
+        "code": "SRCL-13892",
+        "title": "愛MUST BE【初回仕様限定盤 TYPE-B】",
+        "type": "SINGLE",
+        "release_date": "2026-10-14",
+        "price_text": "2,000円 (税込)",
+        "jacket": "https://sakurazaka46.com/images/14/f4c/b997c956d640de3a3ccb0e147e692/500_320_102400.jpg",
+        "url": "https://sakurazaka46.com/s/s46/discography/SRCL-13892?ima=0000"
+      }
+    ],
+    "next": [
+      {
+        "tool": "get_discography",
+        "params": {
+          "code": "SRCL-13890"
+        },
+        "why": "tracks/editions"
+      },
+      {
+        "tool": "get_discography",
+        "params": {
+          "code": "SRCL-13892"
+        },
+        "why": "tracks/editions"
+      },
+      {
+        "tool": "get_discography",
+        "params": {
+          "code": "SRCL-13894"
+        },
+        "why": "tracks/editions"
+      }
+    ]
+  },
+  "get_discography": {
+    "code": "SRCL-13890",
+    "url": "https://sakurazaka46.com/s/s46/discography/SRCL-13890?ima=0000",
+    "title": "愛MUST BE【初回仕様限定盤 TYPE-A】",
+    "type": "SINGLE",
+    "nth": "櫻坂46・16th Single",
+    "release_date": "2026-10-14",
+    "catalog_price_text": "SRCL-13890～13891/2,000円 (税込)",
+    "jacket": "https://sakurazaka46.com/images/14/82b/2ac3d4fe35453cd49605181d95312/500_320_102400.jpg",
+    "other_editions": [
+      {
+        "code": "SRCL-13892",
+        "title": "愛MUST BE【初回仕様限定盤 TYPE-B】",
+        "release_date": "2026-10-14",
+        "jacket": "https://sakurazaka46.com/images/14/f4c/b997c956d640de3a3ccb0e147e692/500_320_102400.jpg",
+        "url": "https://sakurazaka46.com/s/s46/discography/SRCL-13892?ima=0000"
+      }
+    ],
+    "sonymusic": {
+      "source_url": "https://www.sonymusic.co.jp/json/v2/artist/sakurazaka46/discography/SRCL-13890",
+      "title": "愛MUST BE【初回仕様限定盤TYPE-A】",
+      "type": "シングル",
+      "release_date": "2026-10-14",
+      "catalog_numbers": "SRCL-13890 ～ SRCL-13891",
+      "price": 2000,
+      "price_extax": 1818,
+      "catch_copy": "咲け、櫻坂46。16th Single発売！",
+      "privileges": [
+        "【初回仕様】(TYPE-A～D)：CD+BD(永久仕様)+応募特典シリアルナンバー、メンバー生写真（各TYPE別・1枚ランダム封入）"
+      ],
+      "shop_url": "http://www.sonymusicshop.jp/m/item/itemShw.php?associate=SMO&cd=SRCL000013890",
+      "discs": [
+        {
+          "disc_number": 1,
+          "title": null,
+          "tracks": [
+            {
+              "track_number": 1,
+              "title": "愛MUST BE"
+            },
+            {
+              "track_number": 2,
+              "title": "元凶"
+            },
+            {
+              "track_number": 3,
+              "title": "自称バレエダンサー"
+            },
+            {
+              "track_number": 4,
+              "title": "愛MUST BE -OFF VOCAL ver.-"
+            },
+            {
+              "track_number": 5,
+              "title": "元凶 -OFF VOCAL ver.-"
+            },
+            {
+              "track_number": 6,
+              "title": "自称バレエダンサー -OFF VOCAL ver.-"
+            }
+          ]
+        },
+        {
+          "disc_number": 2,
+          "title": "四期生LIVE<前編>",
+          "tracks": [
+            {
+              "track_number": 1,
+              "title": "Overture"
+            },
+            {
+              "track_number": 2,
+              "title": "OPENING"
+            },
+            {
+              "track_number": 3,
+              "title": "死んだふり"
+            },
+            {
+              "track_number": 4,
+              "title": "夜空で一番輝いてる星の名前を僕は知らない"
+            },
+            {
+              "track_number": 5,
+              "title": "Make or Break"
+            },
+            {
+              "track_number": 6,
+              "title": "I want tomorrow to come"
+            },
+            {
+              "track_number": 7,
+              "title": "Alter ego"
+            }
+          ]
+        }
+      ]
+    },
+    "next": null
+  },
+  "answer_kyoto_part3": {
+    "question": "16th single Kyoto meet&greet: what time is part 3?",
+    "code": "71292",
+    "url": "https://sakurazaka46.com/s/s46/diary/detail/71292?ima=0000&cd=event_page",
+    "session": {
+      "date": "2026-12-20",
+      "section": "購入者応募抽選企画！16th Single『愛MUST BE』発売記念リアルミート＆グリート(個別トーク会)",
+      "venue_label": "京都会場",
+      "city": "京都",
+      "venue": "京都パルスプラザ",
+      "part": 3,
+      "start_time": "15:30",
+      "end_time": "16:30",
+      "reception_start": null,
+      "reception_end": null,
+      "raw_text": "第3部（15:30〜16:30）"
+    }
+  },
+  "list_special_pages": {
+    "total": 82,
+    "live_count": 37,
+    "archive_pages": 7,
+    "items": [
+      {
+        "slug": "backslive_16th",
+        "title": "櫻坂46「16th Single BACKS LIVE!!」",
+        "date": "2026-12-15",
+        "url": "https://sakurazaka46.com/s/s46/page/backslive_16th?ima=0000",
+        "source": "live",
+        "thumbnail": "https://sakurazaka46.com/images/14/7da/280b46fbfb11fea3b35088212b0c6.jpg"
+      },
+      {
+        "slug": "6th_anniversary",
+        "title": "櫻坂46「6th YEAR ANNIVERSARY LIVE」",
+        "date": "2026-11-14",
+        "url": "https://sakurazaka46.com/s/s46/page/6th_anniversary?ima=0000",
+        "source": "live",
+        "thumbnail": "https://sakurazaka46.com/images/14/cf2/fb758c4ab5461446a05636ba4f083.jpg"
+      }
+    ],
+    "next": [
+      {
+        "tool": "get_special_page",
+        "params": {
+          "slug": "backslive_16th"
+        },
+        "why": "page content"
+      },
+      {
+        "tool": "get_special_page",
+        "params": {
+          "slug": "6th_anniversary"
+        },
+        "why": "page content"
+      },
+      {
+        "tool": "get_special_page",
+        "params": {
+          "slug": "backslive_15th"
+        },
+        "why": "page content"
+      }
+    ]
+  },
+  "get_special_page": {
+    "slug": "16th_single",
+    "url": "https://sakurazaka46.com/s/s46/page/16th_single?ima=0000",
+    "title": "櫻坂46 16th Single「愛MUST BE」",
+    "text": "# 16th Single 愛 MUST BE 2026.10.14 Wed OUT\n\nシリアルナンバー応募抽選ページはこちら\n\n## Music Video\n\n愛MUST BE\n\n自称バレエダンサー\n\n元凶\n\n## Teaser\n\nメンバーがこの秋挑戦したい「○○の秋」を当てるクイズを出題！\n\n「食欲」「スポーツ」「読書」「芸術」「紅葉」の中から、\n答えを予想してみてください！\n\n正解すると、メンバーの〇〇の秋写真をチェックできます。\n\nぜひチャレンジしてみてください！\n\n挑戦する\n\n## Release\n\n### 初回仕様限定盤 TYPE-A(CD+BD)\n\nSRCL-13890～13891\n\n・応募特典シリアルナンバー封入\n\n・メンバー生写真（各TYPE別より1枚ランダム封入）\n\n￥2,000（tax in）\n\nVIEW DETAIL\n\n### 初回仕様限定盤 TYPE-B(CD+B",
+    "truncated": null,
+    "text_length": 2767,
+    "images": [
+      "https://sakurazaka46.com/images/14/74a/cb228ec45c0ef05aec272c60268c6.jpg",
+      "https://sakurazaka46.com/images/14/e6c/4c371bfee4154a9a97e6870c655eb.png",
+      "https://sakurazaka46.com/images/14/82b/2ac3d4fe35453cd49605181d95312.jpg"
+    ],
+    "links": [
+      {
+        "url": "https://ticket.fortunemeets.app/sakurazaka46/16th#/",
+        "text": "シリアルナンバー応募抽選ページはこちら",
+        "external": true
+      },
+      {
+        "url": "https://sakurazaka46.com/s/s46/page/16thSG_autumn_must_be",
+        "text": "挑戦する",
+        "external": null
+      },
+      {
+        "url": "https://sakurazaka46.com/s/s46/artist/67",
+        "text": "村井優",
+        "external": null
+      }
+    ],
+    "videos": [
+      {
+        "provider": "youtube",
+        "id": "Sp4xl7wtqtc",
+        "url": "https://www.youtube.com/watch?v=Sp4xl7wtqtc"
+      },
+      {
+        "provider": "youtube",
+        "id": "G0NTHaW8eXw",
+        "url": "https://www.youtube.com/watch?v=G0NTHaW8eXw"
+      },
+      {
+        "provider": "youtube",
+        "id": "88-asxwFoI4",
+        "url": "https://www.youtube.com/watch?v=88-asxwFoI4"
+      },
+      {
+        "provider": "youtube",
+        "id": "uPgpBFOuwIk",
+        "url": "https://www.youtube.com/watch?v=uPgpBFOuwIk"
+      },
+      {
+        "provider": "youtube",
+        "id": "yKfAdAtJP_0",
+        "url": "https://www.youtube.com/watch?v=yKfAdAtJP_0"
+      },
+      {
+        "provider": "brightcove",
+        "id": "6406683132112",
+        "account": "4504957038001"
+      }
+    ],
+    "next": null
+  },
+  "list_store_products": {
+    "total": 1285,
+    "page": 1,
+    "per_page": 50,
+    "pages": 26,
+    "category_name": "【通常配送】ALL ITEMS",
+    "items": [
+      {
+        "product_id": "114877",
+        "name": "【通常配送】櫻坂46ランダム生写真(5枚1セット)【「5th YEAR ANNIVERSARY LIVE」オープニング衣装】(直筆サイン入り生写真をランダムで封入)",
+        "url": "https://store.plusmember.jp/sakurazaka46/products/detail.php?product_id=114877",
+        "thumbnail": "https://storage-store.plusmember.jp/upload/save_image/01_sakura_05_sakura_6thani_photo_6WtQUsf2_00.jpg",
+        "price": 1200,
+        "price_text": "¥1,200 （税込）",
+        "tax_included": true,
+        "labels": [
+          "NEW",
+          "通常配送"
+        ],
+        "sold_out": null,
+        "sub_text": null
+      },
+      {
+        "product_id": "114878",
+        "name": "【通常配送】櫻坂46ランダム生写真(5枚1セット)【「5th YEAR ANNIVERSARY LIVE」白黒衣装】",
+        "url": "https://store.plusmember.jp/sakurazaka46/products/detail.php?product_id=114878",
+        "thumbnail": "https://storage-store.plusmember.jp/upload/save_image/02_sakura_05_sakura_6thani_photo_6WtQUsf2_00.jpg",
+        "price": 1200,
+        "price_text": "¥1,200 （税込）",
+        "tax_included": true,
+        "labels": [
+          "NEW",
+          "通常配送"
+        ],
+        "sold_out": null,
+        "sub_text": null
+      }
+    ],
+    "next": [
+      {
+        "tool": "get_store_product",
+        "params": {
+          "product_id": "114877"
+        },
+        "why": "price/variations/in_stock"
+      },
+      {
+        "tool": "get_store_product",
+        "params": {
+          "product_id": "114878"
+        },
+        "why": "price/variations/in_stock"
+      },
+      {
+        "tool": "get_store_product",
+        "params": {
+          "product_id": "114879"
+        },
+        "why": "price/variations/in_stock"
+      }
+    ]
+  },
+  "get_store_product": {
+    "product_id": "114889",
+    "item_code": "114889",
+    "name": "【通常配送】6th Anniversary ロゴTシャツ/ホワイト",
+    "url": "https://store.plusmember.jp/sakurazaka46/products/detail.php?product_id=114889",
+    "price": 3500,
+    "price_text": "¥ 3,500 （税込）",
+    "tax_included": true,
+    "item_price": 3500,
+    "categories": [
+      "【通常配送】ALL ITEMS",
+      "ALL ITEMS",
+      "【通常配送】Tシャツ",
+      "【ALL ITEMS】6th YEAR ANNIVERSARY LIVE"
+    ],
+    "labels": [
+      "NEW",
+      "通常配送"
+    ],
+    "content_date": "2026-10-05 19:20:00",
+    "sales_start_text": "2026年10月15日(木)18:00～",
+    "weight": 10,
+    "image": "https://image.emtg.jp/store.emtg.jp/html/upload/save_image/sakura_6thani_logoT_W_6WtQUsf2_00.jpg",
+    "images": [
+      "https://storage-store.plusmember.jp/upload/save_image/sakura_6thani_logoT_W_6WtQUsf2_00.jpg",
+      "https://storage-store.plusmember.jp/upload/save_image/sakura_6thani_logoT_W_6WtQUsf2_01.jpg",
+      "https://storage-store.plusmember.jp/upload/save_image/sakura_6thani_logoT_W_6WtQUsf2_02.jpg",
+      "https://storage-store.plusmember.jp/upload/save_image/sakura_6thani_logoT_W_6WtQUsf2_03.jpg"
+    ],
+    "variation_labels": [
+      "サイズ"
+    ],
+    "variations": [
+      {
+        "classcategory_id1": "2802",
+        "label": "S",
+        "in_stock": true
+      },
+      {
+        "classcategory_id1": "2801",
+        "label": "M",
+        "in_stock": true
+      },
+      {
+        "classcategory_id1": "2800",
+        "label": "L",
+        "in_stock": true
+      },
+      {
+        "classcategory_id1": "2799",
+        "label": "XL",
+        "in_stock": true
+      },
+      {
+        "classcategory_id1": "2848",
+        "label": "XXL",
+        "in_stock": true
+      }
+    ],
+    "in_stock": true,
+    "sold_out": null,
+    "stock_flg": 2,
+    "stock_source": "detail_page_signals",
+    "stock_note": "in_stock comes from the SOLD OUT label / presence of the add-to-cart button. Sold-out variations are removed from the selector by the store, so only purchasable variations are listed. stock_flg is the store's raw, undocumented flag (do not interpret it as a count). Numeric stock is not public.",
+    "description_text": "商品説明\n\n■素材\n\n綿100％\n\n■サイズ\n\nS /M /L /XL/XXL\n\n身丈　66/70/74/78/82\n\n身巾　49/52/55/58/61\n\n肩幅　44/47/50/53/56\n\n袖丈　19/20/22/24/26　(cm)\n\n■生産国\n\nベトナム\n\n販売開始\n2026年10月15日(木)18:00～\n\n注意事項\n\n・本商品と他商品を同時にご購入いただいた場合、商品が全て揃ってから",
+    "next": [
+      {
+        "tool": "check_store_stock",
+        "params": {
+          "product_id": "114889"
+        },
+        "why": "at-least-N stock (guest cart probe)"
+      }
+    ]
+  },
+  "check_store_stock": {
+    "product_id": "114889",
+    "name": "【通常配送】6th Anniversary ロゴTシャツ/ホワイト",
+    "classcategory_id1": "2802",
+    "classcategory_id2": null,
+    "requested_quantity": 50,
+    "probe": "guest_cart",
+    "available": true,
+    "at_least": 28,
+    "exact": 28,
+    "exact_basis": "cart reduced the requested 50 to 28 (below the order cap)",
+    "capped_by_order_limit": false,
+    "order_limit": null,
+    "variation_listed_on_page": true,
+    "message_raw": "※「【通常配送】6th Anniversary ロゴTシャツ/ホワイト」はお一人様28点までです。",
+    "cart_line": {
+      "name": "【通常配送】6th Anniversary ロゴTシャツ/ホワイト",
+      "variation": "サイズ：S",
+      "quantity": 28,
+      "form": "form183",
+      "cart_no": "1"
+    },
+    "cart_emptied": true,
+    "cart_touched": true,
+    "cleanup_error": null,
+    "reservation_note": "Adding to cart does not reserve stock on this store (product pages: 「ご注文確定するまでは、カートに商品が入っていても在庫は確保されていません」); the probe cart is emptied right away.",
+    "next": null
+  }
+}

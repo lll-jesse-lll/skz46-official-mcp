@@ -1,0 +1,436 @@
+{
+ "source": "https://sakurazaka46.com/s/s46/search/artist?ima=0000&display=generation + /s/s46/artist/<id> (prof-elem name/kana/eigo)",
+ "fetched": "2026-10-16",
+ "note": "Current roster only (31). aliases: only mechanically derived zh-Hant/zh-Hans spellings; no curated nicknames are included because none could be sourced from official pages. Add curated entries as {alias, lang, source} with a public source.",
+ "members": [
+  {
+   "member_id": "53",
+   "name": "遠藤 光莉",
+   "kana": "えんどう ひかり",
+   "romaji": "HIKARI ENDO",
+   "generation": "二期生",
+   "name_compact": "遠藤光莉",
+   "aliases": [
+    {
+     "alias": "远藤光莉",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "54",
+   "name": "大園 玲",
+   "kana": "おおぞの れい",
+   "romaji": "REI OZONO",
+   "generation": "二期生",
+   "name_compact": "大園玲",
+   "aliases": [
+    {
+     "alias": "大园玲",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "55",
+   "name": "大沼 晶保",
+   "kana": "おおぬま あきほ",
+   "romaji": "AKIHO ONUMA",
+   "generation": "二期生",
+   "name_compact": "大沼晶保",
+   "aliases": []
+  },
+  {
+   "member_id": "56",
+   "name": "幸阪 茉里乃",
+   "kana": "こうさか まりの",
+   "romaji": "MARINO KOUSAKA",
+   "generation": "二期生",
+   "name_compact": "幸阪茉里乃",
+   "aliases": []
+  },
+  {
+   "member_id": "46",
+   "name": "田村 保乃",
+   "kana": "たむら ほの",
+   "romaji": "HONO TAMURA",
+   "generation": "二期生",
+   "name_compact": "田村保乃",
+   "aliases": []
+  },
+  {
+   "member_id": "47",
+   "name": "藤吉 夏鈴",
+   "kana": "ふじよし かりん",
+   "romaji": "KARIN FUJIYOSHI",
+   "generation": "二期生",
+   "name_compact": "藤吉夏鈴",
+   "aliases": [
+    {
+     "alias": "藤吉夏铃",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "57",
+   "name": "増本 綺良",
+   "kana": "ますもと きら",
+   "romaji": "KIRA MASUMOTO",
+   "generation": "二期生",
+   "name_compact": "増本綺良",
+   "aliases": [
+    {
+     "alias": "增本綺良",
+     "lang": "zh-Hant",
+     "source": "derived: ja→zh-Hant character conversion"
+    },
+    {
+     "alias": "增本绮良",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "48",
+   "name": "松田 里奈",
+   "kana": "まつだ りな",
+   "romaji": "RINA MATSUDA",
+   "generation": "二期生",
+   "name_compact": "松田里奈",
+   "aliases": []
+  },
+  {
+   "member_id": "50",
+   "name": "森田 ひかる",
+   "kana": "もりた ひかる",
+   "romaji": "HIKARU MORITA",
+   "generation": "二期生",
+   "name_compact": "森田ひかる",
+   "aliases": []
+  },
+  {
+   "member_id": "58",
+   "name": "守屋 麗奈",
+   "kana": "もりや れな",
+   "romaji": "RENA MORIYA",
+   "generation": "二期生",
+   "name_compact": "守屋麗奈",
+   "aliases": [
+    {
+     "alias": "守屋丽奈",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "51",
+   "name": "山﨑 天",
+   "kana": "やまさき てん",
+   "romaji": "TEN YAMASAKI",
+   "generation": "二期生",
+   "name_compact": "山﨑天",
+   "aliases": [
+    {
+     "alias": "山崎天",
+     "lang": "zh-Hant",
+     "source": "derived: ja→zh-Hant character conversion"
+    },
+    {
+     "alias": "山崎天",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "59",
+   "name": "石森 璃花",
+   "kana": "いしもり りか",
+   "romaji": "RIKA ISHIMORI",
+   "generation": "三期生",
+   "name_compact": "石森璃花",
+   "aliases": []
+  },
+  {
+   "member_id": "60",
+   "name": "遠藤 理子",
+   "kana": "えんどう りこ",
+   "romaji": "RIKO ENDO",
+   "generation": "三期生",
+   "name_compact": "遠藤理子",
+   "aliases": [
+    {
+     "alias": "远藤理子",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "61",
+   "name": "小田倉 麗奈",
+   "kana": "おだくら れいな",
+   "romaji": "REINA ODAKURA",
+   "generation": "三期生",
+   "name_compact": "小田倉麗奈",
+   "aliases": [
+    {
+     "alias": "小田仓丽奈",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "62",
+   "name": "小島 凪紗",
+   "kana": "こじま なぎさ",
+   "romaji": "NAGISA KOJIMA",
+   "generation": "三期生",
+   "name_compact": "小島凪紗",
+   "aliases": [
+    {
+     "alias": "小岛凪纱",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "63",
+   "name": "谷口 愛季",
+   "kana": "たにぐち あいり",
+   "romaji": "AIRI TANIGUCHI",
+   "generation": "三期生",
+   "name_compact": "谷口愛季",
+   "aliases": [
+    {
+     "alias": "谷口爱季",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "64",
+   "name": "中嶋 優月",
+   "kana": "なかしま ゆづき",
+   "romaji": "YUZUKI NAKASHIMA",
+   "generation": "三期生",
+   "name_compact": "中嶋優月",
+   "aliases": [
+    {
+     "alias": "中岛优月",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "65",
+   "name": "的野 美青",
+   "kana": "まとの みお",
+   "romaji": "MIO MATONO",
+   "generation": "三期生",
+   "name_compact": "的野美青",
+   "aliases": []
+  },
+  {
+   "member_id": "66",
+   "name": "向井 純葉",
+   "kana": "むかい いとは",
+   "romaji": "ITOHA MUKAI",
+   "generation": "三期生",
+   "name_compact": "向井純葉",
+   "aliases": [
+    {
+     "alias": "向井纯叶",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "67",
+   "name": "村井 優",
+   "kana": "むらい ゆう",
+   "romaji": "YU MURAI",
+   "generation": "三期生",
+   "name_compact": "村井優",
+   "aliases": [
+    {
+     "alias": "村井优",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "68",
+   "name": "村山 美羽",
+   "kana": "むらやま みう",
+   "romaji": "MIU MURAYAMA",
+   "generation": "三期生",
+   "name_compact": "村山美羽",
+   "aliases": []
+  },
+  {
+   "member_id": "69",
+   "name": "山下 瞳月",
+   "kana": "やました しづき",
+   "romaji": "SHIZUKI YAMASHITA",
+   "generation": "三期生",
+   "name_compact": "山下瞳月",
+   "aliases": []
+  },
+  {
+   "member_id": "70",
+   "name": "浅井 恋乃未",
+   "kana": "あさい このみ",
+   "romaji": "KONOMI ASAI",
+   "generation": "四期生",
+   "name_compact": "浅井恋乃未",
+   "aliases": [
+    {
+     "alias": "淺井戀乃未",
+     "lang": "zh-Hant",
+     "source": "derived: ja→zh-Hant character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "71",
+   "name": "稲熊 ひな",
+   "kana": "いなぐま ひな",
+   "romaji": "HINA INAGUMA",
+   "generation": "四期生",
+   "name_compact": "稲熊ひな",
+   "aliases": [
+    {
+     "alias": "稻熊ひな",
+     "lang": "zh-Hant",
+     "source": "derived: ja→zh-Hant character conversion"
+    },
+    {
+     "alias": "稻熊ひな",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "72",
+   "name": "勝又 春",
+   "kana": "かつまた はる",
+   "romaji": "HARU KATSUMATA",
+   "generation": "四期生",
+   "name_compact": "勝又春",
+   "aliases": [
+    {
+     "alias": "胜又春",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "73",
+   "name": "佐藤 愛桜",
+   "kana": "さとう ねお",
+   "romaji": "NEO SATO",
+   "generation": "四期生",
+   "name_compact": "佐藤愛桜",
+   "aliases": [
+    {
+     "alias": "佐藤愛櫻",
+     "lang": "zh-Hant",
+     "source": "derived: ja→zh-Hant character conversion"
+    },
+    {
+     "alias": "佐藤爱樱",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "74",
+   "name": "中川 智尋",
+   "kana": "なかがわ ちひろ",
+   "romaji": "CHIHIRO NAKAGAWA",
+   "generation": "四期生",
+   "name_compact": "中川智尋",
+   "aliases": [
+    {
+     "alias": "中川智寻",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "75",
+   "name": "松本 和子",
+   "kana": "まつもと わこ",
+   "romaji": "WAKO MATSUMOTO",
+   "generation": "四期生",
+   "name_compact": "松本和子",
+   "aliases": []
+  },
+  {
+   "member_id": "76",
+   "name": "目黒 陽色",
+   "kana": "めぐろ ひいろ",
+   "romaji": "HIIRO MEGURO",
+   "generation": "四期生",
+   "name_compact": "目黒陽色",
+   "aliases": [
+    {
+     "alias": "目黑陽色",
+     "lang": "zh-Hant",
+     "source": "derived: ja→zh-Hant character conversion"
+    },
+    {
+     "alias": "目黑阳色",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  },
+  {
+   "member_id": "77",
+   "name": "山川 宇衣",
+   "kana": "やまかわ うい",
+   "romaji": "UI YAMAKAWA",
+   "generation": "四期生",
+   "name_compact": "山川宇衣",
+   "aliases": []
+  },
+  {
+   "member_id": "78",
+   "name": "山田 桃実",
+   "kana": "やまだ ももみ",
+   "romaji": "MOMOMI YAMADA",
+   "generation": "四期生",
+   "name_compact": "山田桃実",
+   "aliases": [
+    {
+     "alias": "山田桃實",
+     "lang": "zh-Hant",
+     "source": "derived: ja→zh-Hant character conversion"
+    },
+    {
+     "alias": "山田桃实",
+     "lang": "zh-Hans",
+     "source": "derived: ja→zh-Hans character conversion"
+    }
+   ]
+  }
+ ]
+}
