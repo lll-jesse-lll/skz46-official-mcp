@@ -91,6 +91,7 @@ Offline eval: `node test/eval.mjs` (54 fan queries + 10 live_type cases in `test
 - Graduated members aren't in the table. Use their numeric `member_id` if known.
 
 ## Rules
+- When quoting or summarizing official content (blog posts, news, special pages), always link back to the official URL returned by the tool.
 - Empty fields are `null` (not missing). Treat `null` as "not on the source", never as a value to fill in.
 - Every tool accepts `raw: true`, which adds the raw upstream responses (url, status, fetched_at, sha256, body). Use it only when provenance is needed, because it makes the response large.
 - Image URLs are already filtered (logos, icons, tracking pixels, third-party images and duplicates removed) and absolute. Use them as-is and don't build image URLs yourself.

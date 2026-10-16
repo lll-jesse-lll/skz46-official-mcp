@@ -248,3 +248,8 @@ npm login
 npm publish --access public
 ```
 The package contents are limited by the `files` field to `server/`, `README.md` and `LICENSE`. `package.json` is always included.
+
+## Disclaimer
+**English.** This is an unofficial, fan-made project. It is not affiliated with, endorsed by, or sponsored by Sakurazaka46, Seed & Flower LLC, or Sony Music. All content, names, trademarks and images belong to their respective rights holders. The server fetches publicly available pages from the official site on demand and returns extracted text (including blog post and special page body text), links and image URLs; it does not download, store or rehost images. Please respect the official site's terms of use and view the originals on the official site. Rights holders may request changes or removal by opening a GitHub issue.
+
+**日本語.** 本プロジェクトはファンによる非公式のものであり、櫻坂46、Seed & Flower合同会社、ソニーミュージックとは一切関係がなく、承認・後援を受けたものではありません。すべてのコンテンツ、名称、商標、画像の権利は各権利者に帰属します。本サーバーは公式サイトで一般公開されているページを必要に応じて取得し、抽出したテキスト（ブログ記事や特設ページの本文を含む）、リンク、画像URLを返します。画像のダウンロード・保存・再配布は行いません。公式サイトの利用規約を尊重し、原文・原画像は公式サイトでご覧ください。権利者の方は GitHub の Issue から修正・削除をご依頼いただけます。
