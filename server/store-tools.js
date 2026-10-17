@@ -141,7 +141,7 @@ module.exports = function makeStoreTools({ politeFetch, clean }) {
     } };
 
   // ---------- check_store_stock (guest-cart probe; enabled by default, opt-out SKZ46_DISABLE_CART_PROBE=1) ----------
-  // Adds probe_quantity (default 1 = "in stock yes/no"; up to the per-order cap 50 by explicit opt-in) of one product/variation
+  // Adds probe_quantity (default 50 = the per-order cap: "plenty (>=50)" vs "only N left") of one product/variation
   // to a fresh, isolated guest cart, reads what the cart accepted, then ALWAYS deletes every line and verifies the cart is
   // empty (up to 3 delete rounds + a final check). The cleanup outcome is reported (cart_cleanup 'ok' | 'failed'), never assumed.
   // Cleanup requests ignore the call deadline (still 1 s spacing + per-request timeout). Never checks out, never logs in,
@@ -156,16 +156,16 @@ module.exports = function makeStoreTools({ politeFetch, clean }) {
     return { lines, messages, cartKey, empty };
   }
   const check_store_stock = {
-    description: 'Probe goods-store stock with a temporary guest cart on the LIVE store: adds probe_quantity (default 1 = in stock yes/no; 2-50 only when you need "at least N") of one product/variation to a fresh isolated guest cart, reads what was accepted, then always deletes it and verifies; cart_cleanup reports ok/failed. Never checks out. Disabled when SKZ46_DISABLE_CART_PROBE=1.',
+    description: 'Probe how much stock is left with a temporary guest cart on the LIVE store: tries to add 50 (the per-order cap) of one product/variation; stock_level "plenty" = at least 50, "low" = exactly N remaining (the store cut the quantity), "sold_out". Always deletes the line and verifies (cart_cleanup ok/failed). Never checks out. Disabled when SKZ46_DISABLE_CART_PROBE=1.',
     inputSchema: { type: 'object', additionalProperties: false, required: ['product_id'], properties: {
       product_id: { type: 'string', pattern: '^\\d+$', description: 'Store product id.' },
       classcategory_id1: { type: 'string', pattern: '^\\d+$', description: 'Variation id (from get_store_product variations[].classcategory_id1). Required when the product has variations.' },
       classcategory_id2: { type: 'string', pattern: '^\\d+$', description: 'Second-level variation id when the product has one.' },
-      probe_quantity: { type: 'integer', minimum: 1, maximum: ORDER_CAP, default: 1, description: 'Quantity to add (default 1: only "is it in stock"). Larger values (max 50, the per-order cap) are an explicit opt-in to check "at least N"; the store may reduce it if stock is lower.' } } },
+      probe_quantity: { type: 'integer', minimum: 1, maximum: ORDER_CAP, default: ORDER_CAP, description: 'Quantity to try (default 50, the per-order cap). The store cuts it to the remaining stock when stock is lower, which gives the exact count. Smaller values only answer "at least that many".' } } },
     async run(a) {
       if (process.env.SKZ46_DISABLE_CART_PROBE === '1') throw new Error('check_store_stock is disabled on this server (SKZ46_DISABLE_CART_PROBE=1). It works by adding items to a temporary guest cart on the live store; unset the variable to allow it.');
       const id = String(a.product_id || ''); if (!/^\d+$/.test(id)) throw new Error('product_id must be digits');
-      const want = a.probe_quantity === undefined ? 1 : a.probe_quantity;
+      const want = a.probe_quantity === undefined ? ORDER_CAP : a.probe_quantity;
       if (!(Number.isInteger(want) && want >= 1 && want <= ORDER_CAP)) throw new Error(`probe_quantity must be an integer 1..${ORDER_CAP}`);
       const jar = new Map(); // isolated per call
       const get = (u, o = {}) => politeFetch(u, 'response', { jar, ...o });
@@ -179,7 +179,8 @@ module.exports = function makeStoreTools({ politeFetch, clean }) {
       const hasCart = /fnCheckSubmit\(\)[^>]*>\s*カートに入れる/.test(d.text);
       const soldLabel = /<li class="ico--sold-out/.test(d.text.slice(d.text.indexOf('id="detailrightblock"')));
       const base = { product_id: id, name, classcategory_id1: a.classcategory_id1 || null, classcategory_id2: a.classcategory_id2 || null, requested_quantity: want, probe: 'guest_cart' };
-      if (soldLabel || !hasCart) return clean({ ...base, available: false, at_least: 0, exact: soldLabel ? 0 : null, capped_by_order_limit: false,
+      if (soldLabel || !hasCart) return clean({ ...base, available: false, stock_level: soldLabel ? 'sold_out' : 'unknown', remaining_exact: soldLabel ? 0 : null,
+        summary: soldLabel ? 'Sold out (SOLD OUT label on the product page).' : 'Not purchasable right now (no add-to-cart button); stock unknown.', at_least: 0, exact: soldLabel ? 0 : null, capped_by_order_limit: false,
         message_raw: soldLabel ? 'SOLD OUT label on the product page; no add-to-cart button (cart not touched)' : 'no add-to-cart button (cart not touched)',
         cart_touched: false, cart_cleanup: 'not_needed', cart_emptied: true, cleanup_attempts: 0, cleanup_error: null });
       if (sel1 && !a.classcategory_id1) throw new Error(`product ${id} has variations; pass classcategory_id1: ${opts1.map(o => `${o.label}=${o.value}`).join(', ')}`);
@@ -200,9 +201,15 @@ module.exports = function makeStoreTools({ politeFetch, clean }) {
         const capMsg = msgs.find(m => /一度に購入できる数量は(\d+)まで|一度に数量(\d+)以上の購入はできません/.test(m));
         const capN = capMsg ? Number((/(\d+)/.exec(capMsg.replace(/[^0-9]+/g, ' ').trim()) || [])[1]) : null;
         const reduced = qty > 0 && qty < want; // the cart cut the request: stock (or a lower sale limit) is below `want`
-        result = { available: qty > 0, at_least: qty, // the cart accepted this many, so at least this many are in stock
-          exact: soldMsg && qty === 0 ? 0 : reduced && !(capN !== null && qty === capN) ? qty : null,
-          exact_basis: soldMsg && qty === 0 ? 'store message: sold out' : reduced && !(capN !== null && qty === capN) ? `cart reduced the requested ${want} to ${qty}` : null,
+        const limitCut = reduced && capN !== null && qty === capN; // cut by a per-order sale limit, not by stock
+        const exactN = soldMsg && qty === 0 ? 0 : reduced && !limitCut ? qty : null;
+        const stock_level = qty === 0 ? (soldMsg ? 'sold_out' : 'unknown') : exactN !== null ? 'low' : limitCut ? 'at_least_order_limit' : want === ORDER_CAP ? 'plenty' : 'at_least_requested';
+        const summary = { sold_out: 'Sold out (the store refused the cart add).', unknown: `The cart accepted nothing; stock unknown${msgs.length ? ' (' + msgs.join(' / ') + ')' : ''}.`,
+          low: `Low stock: exactly ${exactN} remaining (the store cut the requested ${want} to ${exactN}).`, plenty: `Plenty: at least ${ORDER_CAP} in stock (the per-order cap; the exact count is not public).`,
+          at_least_order_limit: `At least ${qty} in stock (this product's per-order limit is ${capN}).`, at_least_requested: `At least ${qty} in stock (only ${want} were tried; use probe_quantity 50 to tell plenty from low).` }[stock_level];
+        result = { available: qty > 0, stock_level, remaining_exact: exactN, summary, at_least: qty, // the cart accepted this many, so at least this many are in stock
+          exact: exactN,
+          exact_basis: soldMsg && qty === 0 ? 'store message: sold out' : exactN !== null ? `cart reduced the requested ${want} to ${qty}` : null,
           capped_by_order_limit: (want === ORDER_CAP && qty === ORDER_CAP) || (capN !== null && qty === capN && qty < want),
           order_limit: capN, variation_listed_on_page: listed, message_raw: msgs.join(' / ') || null, cart_line: line || null };
       } catch (e) { probeError = e; }

@@ -53,7 +53,7 @@ function legVenue(desc, date) { if (!desc || !date) return null; const [, mm, dd
     if (dates.some(([m, d]) => m === mm && d === dd)) { const k = findVenue(venueLine);
       return { venue: k ? k.venue : venueLine, venue_raw: venueLine, city: k ? k.city : parts[i], prefecture: k ? k.prefecture : null }; } }
   return null; }
-const HISTORY_START = '2020-10'; // group renamed to 櫻坂46 in Oct 2020: oldest schedule month walked by past fallbacks
+const HISTORY_START = /^\d{4}-\d{2}$/.test(process.env.SKZ46_HISTORY_START || '') ? process.env.SKZ46_HISTORY_START : '2020-10'; // test hook; // group renamed to 櫻坂46 in Oct 2020: oldest schedule month walked by past fallbacks
 const pad = n => String(n).padStart(2, '0');
 const ymd = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 const jstToday = now => { const d = new Date(now.getTime() + 9 * 3600e3); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); };
@@ -163,7 +163,7 @@ function parse(query, opts = {}) {
 const prevMonth = m => { let [y, mo] = m.split('-').map(Number); if (--mo < 1) { mo = 12; y--; } return `${y}-${pad(mo)}`; };
 const nextMonth = m => { let [y, mo] = m.split('-').map(Number); if (++mo > 12) { mo = 1; y++; } return `${y}-${pad(mo)}`; };
 
-module.exports = ({ tools, remainingMs = () => Infinity, DEADLINE_MS = 45000 } = {}) => {
+module.exports = ({ tools, remainingMs = () => Infinity, DEADLINE_MS = Infinity, progress = () => {} } = {}) => {
   const call = (name, args) => tools[name].run(args);
   const inRange = (d, r) => d && d >= r.from && d <= r.to;
   const monthsOf = r => { const out = []; let [y, m] = r.from.split('-').map(Number); const [ty, tm] = r.to.split('-').map(Number);
@@ -179,7 +179,7 @@ module.exports = ({ tools, remainingMs = () => Infinity, DEADLINE_MS = 45000 } =
   async function walkBack(startMonth, visit) {
     let month = startMonth, newest = null, oldest = null, stop = null, stopMsg = null;
     while (month >= HISTORY_START) {
-      try { const enough = await visit(month); newest = newest || month; oldest = month; if (enough) { stop = 'enough'; break; } }
+      try { progress(`searching ${month} (history back to ${HISTORY_START})`); const enough = await visit(month); newest = newest || month; oldest = month; if (enough) { stop = 'enough'; break; } }
       catch (e) { stop = e && e.code === 'DEADLINE' ? 'deadline' : e && e.code === 'TIMEOUT' ? 'upstream_timeout' : 'upstream_error'; stopMsg = e && e.message; break; }
       month = prevMonth(month);
     }
@@ -188,7 +188,7 @@ module.exports = ({ tools, remainingMs = () => Infinity, DEADLINE_MS = 45000 } =
     const continue_before = complete ? null : (oldest || nextMonth(startMonth)); // exclusive cursor for the next call
     return { searched_range: oldest ? { from: oldest, to: newest } : null, history_start: HISTORY_START, history_complete: complete,
       stop_reason: stop || 'history_start_reached', stop_error: stopMsg, truncated_by_deadline: stop === 'deadline', truncated, continue_before,
-      deadline_ms: DEADLINE_MS };
+      deadline_ms: Number.isFinite(DEADLINE_MS) ? DEADLINE_MS : null };
   }
   const walkNote = (w, what) => {
     const r = w.searched_range ? `${w.searched_range.from}..${w.searched_range.to}` : 'no month';

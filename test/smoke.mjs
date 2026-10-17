@@ -191,11 +191,9 @@ try {
     const v = gp.variations[0];
     const cs = await call('check_store_stock', { product_id: '114889', classcategory_id1: v.classcategory_id1 });
     assert.equal(cs.cart_touched, true); assert.equal(cs.cart_cleanup, 'ok', 'probe cart must be emptied'); assert.equal(cs.cart_emptied, true); assert.equal(cs.cleanup_error, null);
-    assert.equal(cs.requested_quantity, 1); assert.equal(typeof cs.available, 'boolean'); if (cs.available) { assert.equal(cs.at_least, 1); assert.equal(cs.capped_by_order_limit, false); }
-    samples.check_store_stock = cs; ok(`check_store_stock 114889 ${v.label} default probe_quantity 1: available=${cs.available}, at_least=${cs.at_least}, cart_cleanup=${cs.cart_cleanup} (${cs.cleanup_attempts} round)`);
-    const cs50 = await call('check_store_stock', { product_id: '114889', classcategory_id1: v.classcategory_id1, probe_quantity: 50 });
-    assert.equal(cs50.requested_quantity, 50); assert.equal(cs50.cart_cleanup, 'ok'); if (cs50.available) { assert.ok(cs50.at_least >= 1 && cs50.at_least <= 50); if (cs50.at_least === 50) { assert.equal(cs50.capped_by_order_limit, true); assert.equal(cs50.exact, null); } }
-    ok(`check_store_stock probe_quantity 50 (opt-in): at_least=${cs50.at_least}, capped=${cs50.capped_by_order_limit}, cart_cleanup=${cs50.cart_cleanup}`);
+    assert.equal(cs.requested_quantity, 50); assert.ok(['plenty', 'low', 'sold_out', 'unknown', 'at_least_order_limit'].includes(cs.stock_level)); assert.ok(cs.summary);
+    if (cs.stock_level === 'plenty') { assert.equal(cs.at_least, 50); assert.equal(cs.remaining_exact, null); } if (cs.stock_level === 'low') { assert.ok(cs.remaining_exact >= 1 && cs.remaining_exact < 50); assert.equal(cs.at_least, cs.remaining_exact); }
+    samples.check_store_stock = cs; ok(`check_store_stock 114889 ${v.label} (default 50): stock_level=${cs.stock_level}, at_least=${cs.at_least}, remaining_exact=${cs.remaining_exact}, cart_cleanup=${cs.cart_cleanup} (${cs.cleanup_attempts} round) — ${cs.summary}`);
     if (soP) { const cso = await call('check_store_stock', { product_id: soP.product_id }); assert.equal(cso.available, false); assert.equal(cso.cart_touched, false); ok(`check_store_stock sold-out ${soP.product_id}: available=false without touching the cart`); }
     const needVar = await rpc('tools/call', { name: 'check_store_stock', arguments: { product_id: '114889' } }); assert.equal(needVar.result.isError, true); assert.match(needVar.result.content[0].text, /classcategory_id1/); ok('check_store_stock without required variation -> isError listing variations');
   }
@@ -238,24 +236,17 @@ try {
     assert.deepEqual(b.result.matches.map(m => m.code), ['71292']); assert.ok(b.result.matches.every(m => m.sessions.every(x => x.date >= '2026-10-16')));
     const bp = await call('ask', { query: '上次京都見面會第3部幾點' }); assert.ok(bp.result.matches.some(m => m.sessions.some(x => x.date < '2026-10-16')));
     const bn = await call('ask', { query: '名古屋見面會第9部幾點' }); assert.equal(bn.result.none_upcoming, true); assert.deepEqual(bn.result.matches, []); assert.ok(!bn.result.latest_past_event || bn.result.next_hint.tool === 'get_meet_greet_event');
-    const tlv = Date.now(); const lv = await call('ask', { query: '大阪演唱會' }); const lvMs = Date.now() - tlv; assert.equal(lv.interpreted_as.intent, 'live'); assert.ok(lvMs < 48000, `大阪演唱會 took ${lvMs} ms`); timings.osaka = lvMs;
+    const tlv = Date.now(); const lv = await call('ask', { query: '大阪演唱會' }); const lvMs = Date.now() - tlv; assert.equal(lv.interpreted_as.intent, 'live'); timings.osaka_one_call = lvMs;
     assert.equal(lv.result.live_type, 'solo'); assert.ok([...lv.result.schedule, ...lv.result.special_pages].every(x => x.live_type !== 'festival' && !/GIGANTIC/i.test(x.title)));
     { const y = await call('ask', { query: '横浜 演唱會' }); assert.ok(y.result.special_pages.some(x => x.slug === 'backslive_16th' && x.venue === 'ぴあアリーナMM' && x.city === '横浜'));
       const z = await call('ask', { query: 'ZOZOマリン ライブ' }); assert.ok(z.result.special_pages.some(x => x.venue === 'ZOZOマリンスタジアム')); }
     if (lv.result.festival_hint) assert.ok(lv.result.festival_hint.items.every(x => x.live_type === 'festival'));
-    if (lv.result.none_upcoming) { assert.ok(lv.result.searched_range && 'truncated_by_deadline' in lv.result);
-      // follow the continuation cursor (each call is capped by the 45 s deadline) until the 2025 Osaka show is reached
-      let cur = lv, k = cur.result.schedule.find(x => x.venue === '京セラドーム大阪'); timings.osaka_calls = [lvMs];
-      for (let i = 0; !k && cur.next && cur.next[0].tool === 'ask' && i < 3; i++) { const t1 = Date.now(); cur = await call('ask', cur.next[0].params); const ms = Date.now() - t1; timings.osaka_calls.push(ms); assert.ok(ms < 48000, `continuation took ${ms} ms`);
-        assert.ok(cur.result.searched_range); k = cur.result.schedule.find(x => x.venue === '京セラドーム大阪'); } assert.ok(k && k.is_past === true && k.dates.includes('2025-08-24') && /Addiction/.test(k.title), 'Osaka past fallback must include 2025 京セラドーム tour final'); }
+    if (lv.result.none_upcoming) { assert.ok(lv.result.searched_range); assert.equal(lv.result.truncated_by_deadline, false, 'no default deadline');
+      const k = lv.result.schedule.find(x => x.venue === '京セラドーム大阪'); assert.ok(k && k.is_past === true && k.dates.includes('2025-08-24') && /Addiction/.test(k.title), 'Osaka past fallback (one call) must include 2025 京セラドーム tour final'); }
     if (lv.result.none_upcoming) assert.ok([...lv.result.schedule, ...lv.result.special_pages].every(x => x.is_past === true)); else assert.ok(lv.result.is_past === false);
-    { const t0 = Date.now(); const nm = await call('ask', { query: '広島演唱會' }); const ms = Date.now() - t0; timings.no_match = ms; const r = nm.result;
-      assert.ok(ms < 48000, `no-match query took ${ms} ms`); assert.ok(r.searched_range, 'searched_range missing');
-      if (!r.history_complete) { assert.ok(r.continue_before && nm.next && nm.next[0].params.before === r.continue_before); }
-      if (r.truncated) assert.match(r.note, /NOT searched/);
-      ok(`real no-match-ish query 広島演唱會: ${ms} ms, found ${r.schedule.length + r.special_pages.length}, searched ${r.searched_range.from}..${r.searched_range.to}, truncated_by_deadline=${r.truncated_by_deadline}, history_complete=${r.history_complete}`);
-      if (nm.next) { const t1 = Date.now(); const c2 = await call('ask', nm.next[0].params); const ms2 = Date.now() - t1; timings.no_match_continue = ms2; assert.ok(ms2 < 48000); assert.equal(c2.result.continued_before, r.continue_before);
-        ok(`continuation before=${r.continue_before}: ${ms2} ms, searched ${c2.result.searched_range && c2.result.searched_range.from}..${c2.result.searched_range && c2.result.searched_range.to}, history_complete=${c2.result.history_complete}`); } }
+    { const t0 = Date.now(); const nm = await call('ask', { query: '広島演唱會' }); const ms = Date.now() - t0; timings.hiroshima_one_call = ms; const r = nm.result;
+      assert.ok(r.searched_range, 'searched_range missing'); assert.equal(r.truncated, false, `stopped: ${r.stop_reason} ${r.stop_error}`); assert.ok(r.history_complete || r.stop_reason === 'enough');
+      ok(`広島演唱會 in one call: ${ms} ms, found ${r.schedule.length + r.special_pages.length}, searched ${r.searched_range.from}..${r.searched_range.to}, stop_reason=${r.stop_reason}, history_complete=${r.history_complete}`); }
     const c = await call('ask', { query: '石森璃花 最新blog' }); assert.ok(c.result.items.length && c.result.items.every(i => i.member_id === '59')); assert.equal(c.next[0].tool, 'get_blog_post');
     const d = await call('ask', { query: '下週有什麼音番' }); assert.equal(d.interpreted_as.params.genre, 'music_tv'); assert.ok(Array.isArray(d.result.items));
     const e = await call('ask', { query: '遠藤 blog' }); assert.equal(e.ambiguous, true); assert.equal(e.result, null); assert.equal(e.candidates.length, 2);

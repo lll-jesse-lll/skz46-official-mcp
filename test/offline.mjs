@@ -9,16 +9,30 @@ const results = []; const ok = n => { results.push(n); console.log('PASS', n); }
 
 function server(env) {
   const srv = spawn('node', ['-r', path.join(root, 'test/mock-fetch.cjs'), path.join(root, 'server/index.js')], { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, ...env } });
-  let buf = '', nid = 0; const pend = new Map();
-  srv.stdout.on('data', c => { buf += c; let i; while ((i = buf.indexOf('\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1); pend.get(m.id)?.(m); pend.delete(m.id); } });
+  let buf = '', nid = 0; const pend = new Map(); const notes = [];
+  srv.stdout.on('data', c => { buf += c; let i; while ((i = buf.indexOf('\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1); if (m.id === undefined) { notes.push(m); continue; } pend.get(m.id)?.(m); pend.delete(m.id); } });
   const rpc = (method, params) => new Promise(r => { const id = ++nid; pend.set(id, r); srv.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n'); });
-  const call = async (name, args) => { const t0 = Date.now(); const m = await rpc('tools/call', { name, arguments: args }); return { ms: Date.now() - t0, isError: m.result.isError, out: m.result.structuredContent, text: m.result.content[0].text, bytes: Buffer.byteLength(m.result.content[0].text) }; };
-  return { srv, rpc, call, close: () => srv.stdin.end() };
+  const call = async (name, args, meta) => { const t0 = Date.now(); const m = await rpc('tools/call', { name, arguments: args, ...(meta ? { _meta: meta } : {}) }); return { ms: Date.now() - t0, isError: m.result.isError, out: m.result.structuredContent, text: m.result.content[0].text, bytes: Buffer.byteLength(m.result.content[0].text) }; };
+  return { srv, rpc, call, notes, close: () => srv.stdin.end() };
 }
 const prevMonth = m => { let [y, mo] = m.split('-').map(Number); if (--mo < 1) { mo = 12; y--; } return `${y}-${String(mo).padStart(2, '0')}`; };
 
 try {
-  // ---- 1. whole-call deadline with an empty upstream (no matches anywhere) ----
+  // ---- 0. default: no whole-call deadline -> one call searches until history is exhausted (history start moved by test hook) ----
+  { const now = new Date(Date.now() + 9 * 3600e3); let y = now.getUTCFullYear(), m = now.getUTCMonth() + 1 - 4; if (m < 1) { m += 12; y--; }
+    const hs = `${y}-${String(m).padStart(2, '0')}`;
+    const s = server({ MOCK_FETCH: 'empty', SKZ46_HISTORY_START: hs, SKZ46_DEADLINE_MS: '' });
+    const lv = await s.call('ask', { query: '大阪演唱會' }, { progressToken: 'p1' }); const r = lv.out.result;
+    assert.equal(lv.isError, false, lv.text); assert.equal(r.history_complete, true); assert.equal(r.truncated, false); assert.equal(r.truncated_by_deadline, false);
+    assert.equal(r.searched_range.from, hs); assert.equal(r.continue_before, null); assert.equal(r.deadline_ms, null); assert.match(r.note, /Searched all history/);
+    const pr = s.notes.filter(n => n.method === 'notifications/progress' && n.params.progressToken === 'p1'); assert.ok(pr.length >= 5, `${pr.length} progress notes`);
+    ok(`default (no deadline): one call walks to the history start (${hs}) -> history_complete, ${lv.ms} ms, ${pr.length} progress notifications`);
+    s.close(); }
+  { const s = server({ MOCK_FETCH: 'flaky', SKZ46_FETCH_TIMEOUT_MS: '1000' });
+    const g = await s.call('get_schedule', { month: '2026-10' }); assert.equal(g.isError, false, g.text); assert.ok(g.ms >= 1000 && g.ms < 4000);
+    ok(`request retry: first attempt hangs, retried GET succeeds (${g.ms} ms)`); s.close(); }
+
+  // ---- 1. opt-in whole-call deadline (SKZ46_DEADLINE_MS) with an empty upstream ----
   { const log = path.join(os.tmpdir(), `skz46-mock-${process.pid}.log`); fs.rmSync(log, { force: true });
     const s = server({ MOCK_FETCH: 'empty', SKZ46_DEADLINE_MS: '8000', MOCK_LOG: log });
     const lv = await s.call('ask', { query: '大阪演唱會' });
@@ -28,7 +42,7 @@ try {
     assert.ok(r.searched_range && /^\d{4}-\d{2}$/.test(r.searched_range.from) && r.searched_range.to >= r.searched_range.from);
     assert.equal(r.continue_before, r.searched_range.from); assert.match(r.note, /NOT searched/); assert.deepEqual(r.schedule, []);
     assert.equal(lv.out.next[0].tool, 'ask'); assert.equal(lv.out.next[0].params.before, r.continue_before); assert.equal(lv.out.next[0].params.query, '大阪演唱會');
-    ok(`deadline: no-match live search returns in ${lv.ms} ms (deadline 8000) with truncated_by_deadline, searched_range ${r.searched_range.from}..${r.searched_range.to}, next.before=${r.continue_before}`);
+    ok(`opt-in deadline: no-match live search returns in ${lv.ms} ms (deadline 8000) with truncated_by_deadline, searched_range ${r.searched_range.from}..${r.searched_range.to}, next.before=${r.continue_before}`);
     const c2 = await s.call('ask', lv.out.next[0].params);
     assert.equal(c2.isError, false, c2.text); assert.equal(c2.out.result.continued_before, r.continue_before); assert.equal(c2.out.result.searched_range.to, prevMonth(r.continue_before));
     assert.ok(c2.out.result.searched_range.from < r.searched_range.from); assert.ok(c2.ms < 9500);
@@ -46,8 +60,8 @@ try {
   // ---- 2. per-request timeout and deadline with a hanging upstream ----
   { const s = server({ MOCK_FETCH: 'hang', SKZ46_FETCH_TIMEOUT_MS: '1000', SKZ46_DEADLINE_MS: '30000' });
     const g = await s.call('get_schedule', {});
-    assert.equal(g.isError, true); assert.match(g.text, /upstream timeout after 1000 ms/); assert.ok(g.ms < 2500, `${g.ms} ms`);
-    ok(`request timeout: hanging upstream aborted after ${g.ms} ms (SKZ46_FETCH_TIMEOUT_MS=1000)`); s.close(); }
+    assert.equal(g.isError, true); assert.match(g.text, /upstream timeout after 1000 ms .*\(3 attempts\)/); assert.ok(g.ms < 7000, `${g.ms} ms`);
+    ok(`request timeout: hanging upstream -> 3 attempts x 1000 ms, error after ${g.ms} ms (never stalls)`); s.close(); }
   { const s = server({ MOCK_FETCH: 'hang', SKZ46_FETCH_TIMEOUT_MS: '15000', SKZ46_DEADLINE_MS: '3000' });
     const g = await s.call('get_formation', {});
     assert.equal(g.isError, true); assert.match(g.text, /deadline/); assert.match(g.text, /NOT a "no results" answer/); assert.ok(g.ms < 3600, `${g.ms} ms`);
@@ -95,17 +109,17 @@ try {
         throw new Error('unexpected ' + url); };
       return { st, tool: req(path.join(root, 'server/store-tools.js'))({ politeFetch, clean: o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v === undefined || v === '' ? null : v])) }).check_store_stock };
     };
-    { const { st, tool } = ST({}); const r = await tool.run({ product_id: '1' });
-      assert.deepEqual(st.posted, ['1']); assert.equal(r.requested_quantity, 1); assert.equal(r.available, true); assert.equal(r.at_least, 1); assert.equal(r.exact, null); assert.equal(r.capped_by_order_limit, false);
+    { const { st, tool } = ST({ stock: 100 }); const r = await tool.run({ product_id: '1' });
+      assert.deepEqual(st.posted, ['50']); assert.equal(r.requested_quantity, 50); assert.equal(r.stock_level, 'plenty'); assert.equal(r.at_least, 50); assert.equal(r.remaining_exact, null); assert.equal(r.capped_by_order_limit, true); assert.match(r.summary, /at least 50/);
       assert.equal(r.cart_cleanup, 'ok'); assert.equal(r.cart_emptied, true); assert.equal(r.cleanup_attempts, 1); assert.equal(st.cart.length, 0);
-      ok('probe default: quantity 1 posted -> available yes/no, cart_cleanup ok after 1 round'); }
-    { const { st, tool } = ST({ stock: 7 }); const r = await tool.run({ product_id: '1', probe_quantity: 50 });
-      assert.deepEqual(st.posted, ['50']); assert.equal(r.at_least, 7); assert.equal(r.exact, 7); assert.match(r.exact_basis, /reduced the requested 50 to 7/);
-      const r2 = await ST({ stock: 100 }).tool.run({ product_id: '1', probe_quantity: 50 }); assert.equal(r2.at_least, 50); assert.equal(r2.capped_by_order_limit, true); assert.equal(r2.exact, null);
-      const r3 = await ST({ stock: 100 }).tool.run({ product_id: '1', probe_quantity: 5 }); assert.equal(r3.at_least, 5); assert.equal(r3.exact, null); assert.equal(r3.capped_by_order_limit, false);
+      ok('probe default 50, stock 100 -> stock_level plenty (at least 50), cart_cleanup ok after 1 round'); }
+    { const { st, tool } = ST({ stock: 7 }); const r = await tool.run({ product_id: '1' });
+      assert.deepEqual(st.posted, ['50']); assert.equal(r.stock_level, 'low'); assert.equal(r.remaining_exact, 7); assert.equal(r.exact, 7); assert.match(r.summary, /exactly 7 remaining/); assert.match(r.exact_basis, /reduced the requested 50 to 7/);
+      const r1 = await ST({ stock: 1 }).tool.run({ product_id: '1' }); assert.equal(r1.stock_level, 'low'); assert.equal(r1.remaining_exact, 1); assert.match(r1.summary, /exactly 1 remaining/);
+      const r3 = await ST({ stock: 100 }).tool.run({ product_id: '1', probe_quantity: 5 }); assert.equal(r3.at_least, 5); assert.equal(r3.stock_level, 'at_least_requested'); assert.equal(r3.capped_by_order_limit, false);
       await assert.rejects(ST({}).tool.run({ product_id: '1', probe_quantity: 51 }), /probe_quantity must be an integer 1\.\.50/);
       await assert.rejects(ST({}).tool.run({ product_id: '1', probe_quantity: 0 }), /probe_quantity/);
-      ok('probe_quantity opt-in: 50 with stock 7 -> exact 7; 50 with stock 100 -> at_least 50 capped; 5 -> at_least 5; 0/51 rejected'); }
+      ok('probe low stock: stock 7 -> low, exactly 7 remaining; stock 1 -> exactly 1 remaining; probe_quantity 5 -> at_least_requested; 0/51 rejected'); }
     { const { st, tool } = ST({ failDelete: true }); const r = await tool.run({ product_id: '1' });
       assert.equal(r.cart_cleanup, 'failed'); assert.equal(r.cart_emptied, false); assert.equal(r.cleanup_attempts, 3); assert.match(r.cleanup_error, /still in the guest cart after 3 delete round/); assert.ok(r.cleanup_note);
       assert.ok(st.ignore.slice(-5).every(Boolean), 'cleanup requests must ignore the call deadline');

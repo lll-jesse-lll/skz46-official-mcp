@@ -8,14 +8,14 @@ Agent Plugin (Agent Plugins 1.0.0 format) that wraps the **public, no-login** JS
   - To get the v0.4.1 output back, pass `include_content: true, limit: 200`. Responses above `max_bytes` (default 600,000 bytes of item JSON, env `SKZ46_MAX_RESPONSE_BYTES`) are cut at a whole-item boundary with `truncated: true` and a `next` hint (`offset`). Pass a larger `max_bytes` (up to 20,000,000) to avoid the cut.
   - New result fields: `limit`, `returned`, `include_content`, `has_more`, `truncated`, `truncated_reason`, `items_bytes`, `next` (next page).
   - `raw: true` is unchanged: `raw[].body` is the full upstream response (all items, full HTML) with its sha256, never cut. The upstream URL is the same as before for the same `dy`/`category`/`offset`.
-- **`check_store_stock` adds 1 by default** (was 50). The default answers "in stock: yes/no". Pass `probe_quantity` (2–50) to ask "at least N"; 50 reproduces the old behaviour.
+- **`check_store_stock`** still tries 50 (the per-order cap) by default, and now says plainly what that means: `stock_level: 'plenty'` (at least 50) vs `'low'` with `remaining_exact: N` (the store cut 50 to the N left) vs `'sold_out'`, plus a one-line `summary`. `probe_quantity` (1–50) is optional.
   - Cleanup is reported, never assumed: `cart_cleanup: 'ok' | 'failed' | 'not_needed'`, `cleanup_attempts` (up to 3 delete rounds, then a final check), `cleanup_error`, `cleanup_note`. `cart_emptied` stays (true only when the store showed its empty-cart message).
 - **`get_blog_post` / `get_meet_greet_event` cap `body_text` at 20,000 chars** by default (`max_chars` up to 100,000), with `body_truncated` and `body_length`. `get_special_page` takes `max_chars` too, and always returns `truncated` (boolean) and `text_length` (full length).
 
 **Fixes:**
-- **Every tool call has a deadline** (default 45 s, env `SKZ46_DEADLINE_MS`), counted from the start of the call and including the wait in the shared 1 s request queue. Each upstream request also has a timeout (default 15 s, env `SKZ46_FETCH_TIMEOUT_MS`, via `AbortSignal`), shortened to the time left before the deadline.
-  - `ask` past-history searches (schedule past fallback, live/concert past walk) stop at the deadline and return what they found with `truncated_by_deadline: true`, `searched_range: {from, to}` (months actually covered), `history_start`, `history_complete`, `stop_reason`, `continue_before` and a `next` hint `{tool: 'ask', params: {query, before: 'YYYY-MM'}}`. Calling it continues with older months, so all history (back to 2020-10) is still reachable over several calls. A truncated search never claims "no results"; its note says which months were not searched.
-  - Other tools that hit the deadline or a timeout return an error that says so (and that it is not a "no results" answer). `list_special_pages` returns the pages it already read with `truncated: true` instead.
+- **One call gives the answer.** History searches have **no whole-call time limit by default**: `ask` keeps walking back until it finds enough or reaches the start of history (2020-10). Each upstream request has a timeout (default 15 s, env `SKZ46_FETCH_TIMEOUT_MS`, via `AbortSignal`) and a timed-out or failed GET is retried up to 2 times (env `SKZ46_FETCH_RETRIES`; POSTs are never retried), so a hung upstream cannot stall a call forever. Long walks send MCP `notifications/progress` when the client passes a `progressToken`.
+  - Results of a history walk carry `searched_range: {from, to}` (months actually covered), `history_start`, `history_complete`, `stop_reason` (`enough` | `history_start_reached` | `upstream_timeout` | `upstream_error` | `deadline`) and `continue_before`. If a walk stops early (repeated upstream failure, or an opt-in deadline), the result says `truncated: true`, which months were not searched, and gives a `next` hint `{tool: 'ask', params: {query, before: 'YYYY-MM'}}` to continue; it never claims "no results". `before` can also be passed by hand to search only older months.
+  - **Opt-in deadline:** set `SKZ46_DEADLINE_MS` (e.g. 45000) for hosts that kill long calls. Then searches stop at that time with `truncated_by_deadline: true` and the `next` cursor above, other tools return an error that says it is not a "no results" answer, and `list_special_pages` returns the pages it already read with `truncated: true`.
   - `ask` reuses the special-page list for 10 minutes (it costs ~9 requests). Direct `list_special_pages` calls always fetch.
 - **stdout is flushed before exit** when the client closes stdin, so the last large reply is never cut.
 
@@ -100,7 +100,7 @@ The source is the official goods store at `store.plusmember.jp/sakurazaka46`. It
 - `in_stock` is `true` when the add-to-cart button is shown and there is no SOLD OUT label. Otherwise it is omitted.
 - **Sold-out variations are removed from the size/colour selector.** Example: the stadium jumper 114894 lists sizes M/L/XL in its description, but the selector offers only XL. Adding size M to the cart is refused with 「…/M」は売り切れました. So `variations[]` lists only purchasable variations, each with `in_stock: true`. Sold-out variations are not listed and are never invented.
 - `stock_flg` is the store's raw, undocumented flag. Observed values: 2 on in-stock items, and 0 on fully sold-out items and on 114894, which had only XL left. It is passed through raw and is **not** a count.
-- **Numeric stock counts are not public.** A guest cart caps every line at the per-order sale limit (「一度に購入できる数量は50までです」), so a quantity probe shows "≥ 50" for normal stock. Since v0.4.1, `check_store_stock` runs this probe on request (see below); since v0.4.2 it adds 1 by default and 50 only with `probe_quantity: 50`.
+- **Numeric stock counts are not public.** A guest cart caps every line at the per-order sale limit (「一度に購入できる数量は50までです」), so a quantity probe shows "≥ 50" for normal stock. Since v0.4.1, `check_store_stock` runs this probe on request (see below); since v0.4.2 it reports `stock_level` plenty / low (exact N) / sold_out.
 
 Image URLs from store tools go through the shared filter with the store hosts allowed: `store.plusmember.jp`, `storage-store.plusmember.jp` and `image.emtg.jp`. The store's `user_data/.../img/common` chrome is dropped, including the `cover.gif` lazy-load placeholder; the real thumbnail comes from the background-image.
 
@@ -110,13 +110,14 @@ Image URLs from store tools go through the shared filter with the store hosts al
 Each call does the following:
 1. Uses a fresh, isolated cookie jar (a new guest session) and opens the product page.
 2. If the product shows SOLD OUT or has no add-to-cart button, it answers `available: false` without touching the cart.
-3. Otherwise it adds **`probe_quantity`** of the product or variation (default **1** = in stock yes/no; 2–50 by explicit opt-in, 50 being the store's per-order cap) and reads the cart line and messages.
-4. It then **always deletes every cart line and re-reads the cart**, up to 3 delete rounds plus a final check, and reports the outcome as `cart_cleanup: 'ok' | 'failed'` (`'not_needed'` when the cart was never touched). 'ok' requires the store's own empty-cart message. Cleanup requests are not cut by the call deadline (they keep the 1 s spacing and the request timeout). If cleanup fails, the cart belongs to a throwaway guest session whose cookies are discarded; it reserves no stock and expires on the store side.
+3. Otherwise it adds **50** (the store's per-order cap; `probe_quantity` 1–50 can override) of the product or variation and reads the cart line and messages.
+4. It then **always deletes every cart line and re-reads the cart**, up to 3 delete rounds plus a final check, and reports the outcome as `cart_cleanup: 'ok' | 'failed'` (`'not_needed'` when the cart was never touched). 'ok' requires the store's own empty-cart message. Cleanup requests are not cut by an opt-in call deadline (they keep the 1 s spacing and the request timeout). If cleanup fails, the cart belongs to a throwaway guest session whose cookies are discarded; it reserves no stock and expires on the store side.
    If the probe itself fails (e.g. a timeout while adding), the error message still states `cart_cleanup=…`.
 5. It never goes to checkout, never logs in and never sends personal data. A call is about 5–6 requests, each at least 1 s apart.
 
 `{ product_id, name, classcategory_id1, classcategory_id2, requested_quantity, probe: 'guest_cart', available, at_least, exact, exact_basis, capped_by_order_limit, order_limit, variation_listed_on_page, message_raw, cart_line, cart_touched, cart_cleanup, cart_emptied, cleanup_attempts, cleanup_error, cleanup_note, reservation_note }`
-- `at_least`: how many the cart accepted (at most `requested_quantity`). With the default 1 it only means "in stock". With `probe_quantity: 50`, 50 means "at least 50"; `capped_by_order_limit` is then true and `exact` is `null`.
+- `stock_level`: `plenty` (the cart took all 50: at least 50 in stock, exact count not public), `low` (the store cut 50 to N: exactly `remaining_exact` = N left; buy soon), `sold_out`, `at_least_order_limit` (cut to the product's own per-order limit, not stock), `at_least_requested` (a smaller `probe_quantity` was fully accepted), or `unknown`. `summary` says it in one sentence.
+- `at_least`: how many the cart accepted. 50 means "at least 50"; `capped_by_order_limit` is then true and `exact`/`remaining_exact` are `null`.
 - `exact`:
   - It is set to 0 when the store says 売り切れました, e.g. 114894 size M.
   - It is set to the accepted quantity when the cart cut the requested quantity to fewer. On 2026-10-16 every in-stock variation probed accepted 50; on 2026-10-17 (v0.4.2 smoke test) a request for 50 of 114889 size S was cut to 26, so the reduction does happen. In EC-CUBE 2, the cart lowers an over-limit quantity to the smaller of stock and the sale limit, so a smaller number means stock (unless `order_limit` says the sale limit is that number).
@@ -177,7 +178,7 @@ Each call does the following:
 
   - **Venues:** `server/venues.json` maps about 40 major venues (Osaka, Tokyo, Kanagawa, Saitama, Chiba, Aichi, Fukuoka, Hokkaido, Miyagi, Hiroshima, Hyogo, Kyoto, Kagawa) and their aliases to city/prefecture. The venue is read from schedule 【会場】 lines and from live pages (### 会場 / 会場・日程; up to 4 upcoming pages are read). Items carry `venue`, `venue_raw`, `city` and `prefecture`. A query matches on city OR venue, and venue names work directly (e.g. "京セラ ライブ").
 
-  - **Past fallback covers all history** (schedule back to 2020-10, LIVE + ARCHIVE pages; the meet&greet list API is already complete). Results are newest first, capped (3 shows for live, 10 items for schedule), and labeled `is_past: true` with a "no upcoming" note. Multi-day shows are merged into `dates[]`. Tour legs are matched to the date via 《県》venue blocks. Cost: about 1 s per month walked back. The walk stops when enough is found, at 2020-10, or at the call deadline (45 s); results then carry `searched_range`, `history_complete`, `truncated_by_deadline` and `next` → `ask {query, before}` to continue older (v0.4.2).
+  - **Past fallback covers all history** (schedule back to 2020-10, LIVE + ARCHIVE pages; the meet&greet list API is already complete). Results are newest first, capped (3 shows for live, 10 items for schedule), and labeled `is_past: true` with a "no upcoming" note. Multi-day shows are merged into `dates[]`. Tour legs are matched to the date via 《県》venue blocks. Cost: about 1 s per month walked back. Since v0.4.2 there is no time cut by default: one call walks until enough is found or 2020-10 is reached (a city with no show at all takes a few minutes, since each month costs ~3 s at the site). Results carry `searched_range` and `history_complete`; `before` and the opt-in `SKZ46_DEADLINE_MS` are described above.
 
 Every result also has `next`: suggested follow-up calls `{tool, params, why}` (e.g. list → detail), or `null`.
 
@@ -192,7 +193,7 @@ Offline eval: `node test/eval.mjs` (54 fan queries + 10 live_type cases in `test
 | `list_store_categories` | — | store.plusmember.jp/sakurazaka46 menu (HTML) |
 | `list_store_products` | `category_id?`, `keyword?`, `page?` | `products/list.php` (GET page 1; POST `pageno` form for later pages) |
 | `get_store_product` | `product_id` | `products/detail.php` (HTML; hidden `div.__items__*` block + selectors) |
-| `check_store_stock` | `product_id`, `classcategory_id1?`, `classcategory_id2?`, `probe_quantity?`=1 (≤50) | **live guest-cart probe** on store.plusmember.jp (enabled by default; set `SKZ46_DISABLE_CART_PROBE=1` to turn it off) |
+| `check_store_stock` | `product_id`, `classcategory_id1?`, `classcategory_id2?`, `probe_quantity?`=50 | **live guest-cart probe** on store.plusmember.jp (enabled by default; set `SKZ46_DISABLE_CART_PROBE=1` to turn it off) |
 | `resolve_member` | `query` | static table `server/members.json`, built from the official member list and profiles (31 current members: id, name, kana, romaji, generation, derived zh aliases) |
 | `list_special_pages` | — | LIVE list + all ARCHIVE list pages (HTML) → `SpecialPageRef[]` |
 | `get_special_page` | `slug`, `max_chars?`=20000 | `/s/s46/page/<slug>` (HTML) → `SpecialPage` |
@@ -220,7 +221,7 @@ Notes on the v0.2.0 tools:
 Upstream behaviour:
 - News and blog return at most 200 items per request. `offset` maps to the upstream `st` (0-based).
 - Calls to upstream are spaced at least 1 s apart.
-- Each tool call has a deadline (`SKZ46_DEADLINE_MS`, default 45000) and each request a timeout (`SKZ46_FETCH_TIMEOUT_MS`, default 15000).
+- Each request has a timeout (`SKZ46_FETCH_TIMEOUT_MS`, default 15000) and GETs are retried up to `SKZ46_FETCH_RETRIES` (default 2) times. A whole-call deadline exists only when `SKZ46_DEADLINE_MS` is set.
 - Errors come back as MCP `isError` results: non-200 status, non-JSON body, or `{"result":"NG"}`.
 
 ## Install
@@ -256,7 +257,7 @@ server/html-tools.js HTML-scraping tools (schedule, formation, blog post, discog
 server/center-evidence.json  hand-verified official center citations
 skills/sakurazaka46-official/SKILL.md
 test/smoke.mjs       end-to-end test against the live site (also runs eval.mjs and offline.mjs)
-test/offline.mjs     offline tests with a mocked fetch (deadline, timeout, news size, cart probe, EOF drain)
+test/offline.mjs     offline tests with a mocked fetch (one-call history walk, retries, opt-in deadline, news size, cart probe, EOF drain)
 test/mock-fetch.cjs  test-only fetch mock preload
 ```
 

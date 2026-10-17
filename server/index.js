@@ -8,7 +8,10 @@ const VERSION = '0.4.2';
 const CATEGORIES = ['release', 'goods', 'event', 'media', 'ticket', 'audition'];
 const envInt = (k, d, min) => { const v = Number(process.env[k]); return Number.isFinite(v) && v >= min ? Math.floor(v) : d; };
 // Whole tools/call deadline (all upstream requests of one call, including queue wait) and per-request timeout.
-const DEADLINE_MS = envInt('SKZ46_DEADLINE_MS', 45000, 1000);
+// Default: NO whole-call deadline (searches run until found or history is exhausted, so one call gives the answer).
+// SKZ46_DEADLINE_MS is an opt-in cap for hosts that need one; then searches return partial results + a `before` cursor.
+const DEADLINE_MS = envInt('SKZ46_DEADLINE_MS', Infinity, 1000);
+const FETCH_RETRIES = envInt('SKZ46_FETCH_RETRIES', 2, 0); // extra attempts for a GET that timed out / failed at network level
 const FETCH_TIMEOUT_MS = envInt('SKZ46_FETCH_TIMEOUT_MS', 15000, 500);
 const MAX_RESPONSE_BYTES = envInt('SKZ46_MAX_RESPONSE_BYTES', 600000, 10000); // default byte cap for list_news
 
@@ -19,6 +22,7 @@ const rawStore = new AsyncLocalStorage(); // set per tools/call when arguments.r
 const callCtx = new AsyncLocalStorage(); // { deadline } per tools/call
 class DeadlineError extends Error { constructor(msg) { super(msg); this.name = 'DeadlineError'; this.code = 'DEADLINE'; } }
 class UpstreamTimeoutError extends Error { constructor(msg) { super(msg); this.name = 'UpstreamTimeoutError'; this.code = 'TIMEOUT'; } }
+const progress = (msg) => { const c = callCtx.getStore(); if (c && c.progress) c.progress(msg); };
 const remainingMs = () => { const c = callCtx.getStore(); return c ? c.deadline - Date.now() : Infinity; };
 let chain = Promise.resolve(); let last = 0;
 // Serialized, >=1s spaced request (all hosts share one queue). as: 'json' (default) | 'text' | 'jsonp' | 'response'.
@@ -26,7 +30,7 @@ let chain = Promise.resolve(); let last = 0;
 // call deadline (still has the per-request timeout and the 1 s spacing).
 // Every request has a timeout (AbortSignal, FETCH_TIMEOUT_MS, shortened to the time left before the call deadline).
 function politeFetch(url, as = 'json', opts = {}) {
-  const ctx = callCtx.getStore();
+  const ctx = callCtx.getStore(); let attempt = 0;
   const run = async () => {
     const wait = last + MIN_GAP_MS - Date.now();
     const deadline = ctx && !opts.ignoreDeadline ? ctx.deadline : Infinity;
@@ -49,11 +53,14 @@ function politeFetch(url, as = 'json', opts = {}) {
         if (opts.jar) for (const c of (res.headers.getSetCookie ? res.headers.getSetCookie() : [])) { const m = /^([^=;\s]+)=([^;]*)/.exec(c); if (m) opts.jar.set(m[1], m[2]); }
         text = await res.text();
       } catch (e) {
-        if (signal.aborted || (e && (e.name === 'TimeoutError' || e.name === 'AbortError'))) {
-          if (Date.now() + 300 >= deadline) throw new DeadlineError(`call deadline reached while requesting ${url}`);
-          throw new UpstreamTimeoutError(`upstream timeout after ${timeout} ms for ${url}`);
-        }
-        throw e;
+        last = Date.now();
+        const timedOut = signal.aborted || (e && (e.name === 'TimeoutError' || e.name === 'AbortError'));
+        if (timedOut && Date.now() + 300 >= deadline) throw new DeadlineError(`call deadline reached while requesting ${url}`);
+        // GETs are retried (never POSTs: a repeated cart add could double the quantity), still >=1 s apart
+        if (!opts.form && attempt < FETCH_RETRIES) { attempt++; return run(); }
+        const tries = attempt + 1;
+        if (timedOut) throw new UpstreamTimeoutError(`upstream timeout after ${timeout} ms for ${url} (${tries} attempt${tries > 1 ? 's' : ''})`);
+        throw new Error(`upstream request failed for ${url} (${tries} attempt${tries > 1 ? 's' : ''}): ${e && e.message}`);
       }
       const rec = rawStore.getStore();
       if (rec) rec.push({ url, method: init.method || 'GET', http_status: res.status, content_type: res.headers.get('content-type'),
@@ -194,11 +201,11 @@ const DESC = {
   list_store_categories: 'Use for: official goods store (周邊/グッズ) category list. Not for: products. e.g. "商店有哪些分類".',
   list_store_products: 'Use for: searching/browsing store products (周邊/グッズ) by keyword/category/page. Not for: stock depth. e.g. "タオル 周邊".',
   get_store_product: 'Use for: one store product: price, variations, public in_stock/SOLD OUT. Not for: stock counts. e.g. "product 12345 有貨嗎".',
-  check_store_stock: 'Use for: "is it in stock" via a temporary guest cart on the live store (default probe_quantity 1; up to 50 only to check "at least N"). Always emptied and verified (cart_cleanup ok/failed); no checkout. Not for: browsing; prefer get_store_product first. e.g. "還有貨嗎".',
+  check_store_stock: 'Use for: "還剩多少/快賣完了嗎" via a temporary guest cart on the live store: tries 50; stock_level plenty (>=50) vs low (exactly N left) vs sold_out. Always emptied and verified (cart_cleanup ok/failed); no checkout. Not for: plain in-stock yes/no (get_store_product has it). e.g. "還剩很多嗎".',
   resolve_member: 'Use for: member name/kana/romaji/nickname/zh spelling -> member_id, or "all". Not for: blog/schedule (those accept member names directly). e.g. "谷口爱季 是誰".',
 };
 for (const [k, d] of Object.entries(DESC)) if (tools[k]) tools[k].description = d;
-{ const { ask } = require('./router.js')({ tools, remainingMs, DEADLINE_MS }); const rest = { ...tools }; for (const k of Object.keys(tools)) delete tools[k]; Object.assign(tools, { ask }, rest); }
+{ const { ask } = require('./router.js')({ tools, remainingMs, DEADLINE_MS, progress }); const rest = { ...tools }; for (const k of Object.keys(tools)) delete tools[k]; Object.assign(tools, { ask }, rest); }
 // Follow-up hints: suggested next tool + params (first few items only).
 function nextHints(name, args, out) {
   const it = (out && out.items) || [];
@@ -209,7 +216,7 @@ function nextHints(name, args, out) {
     list_special_pages: () => it.slice(0, 3).map(s => ({ tool: 'get_special_page', params: { slug: s.slug }, why: 'page content' })),
     list_store_categories: () => it.slice(0, 3).map(c => ({ tool: 'list_store_products', params: { category_id: String(c.id) }, why: 'products' })),
     list_store_products: () => it.slice(0, 3).map(p => ({ tool: 'get_store_product', params: { product_id: String(p.product_id) }, why: 'price/variations/in_stock' })),
-    get_store_product: () => out.product_id ? [{ tool: 'check_store_stock', params: { product_id: String(out.product_id) }, why: 'in-stock check (guest cart probe, quantity 1; probe_quantity up to 50 for at-least-N)' }] : [],
+    get_store_product: () => out.product_id ? [{ tool: 'check_store_stock', params: { product_id: String(out.product_id) }, why: 'how much is left: plenty (>=50) vs exactly N (guest cart probe)' }] : [],
     resolve_member: () => it.length === 1 ? [{ tool: 'list_blog_posts', params: { member_id: it[0].member_id } }, { tool: 'get_schedule', params: { member: it[0].member_id } }] : [],
     get_formation: () => out.discography_codes ? out.discography_codes.slice(0, 1).map(c => ({ tool: 'get_discography', params: { code: c }, why: 'track list' })) : [],
   };
@@ -249,13 +256,17 @@ async function handle(msg) {
         try {
           const { raw, ...args } = params.arguments || {};
           let out;
-          const runIt = () => callCtx.run({ deadline: Date.now() + DEADLINE_MS }, () => t.run(args));
+          // MCP progress notifications (when the client sent _meta.progressToken) during long history walks, so hosts that
+          // reset their request timeout on progress keep waiting.
+          const token = params._meta && params._meta.progressToken; let step = 0;
+          const prog = token !== undefined ? msg => send({ jsonrpc: '2.0', method: 'notifications/progress', params: { progressToken: token, progress: ++step, message: msg } }) : null;
+          const runIt = () => callCtx.run({ deadline: Date.now() + DEADLINE_MS, progress: prog }, () => t.run(args));
           if (raw === true) { const rec = []; out = await rawStore.run(rec, runIt); out = { ...out, raw: rec }; }
           else out = await runIt();
           if (out && typeof out === 'object' && !Array.isArray(out) && !('next' in out)) out = { ...out, next: params.name === 'ask' ? askNext(out) : nextHints(params.name, args, out) };
           return reply(id, { content: [{ type: 'text', text: JSON.stringify(out) }], structuredContent: out, isError: false });
         } catch (e) {
-          const msg = e && e.code === 'DEADLINE' ? `${e.message} (whole-call deadline ${DEADLINE_MS} ms, env SKZ46_DEADLINE_MS). No result was produced; this is NOT a "no results" answer. Retry, or narrow the request.` : e.message;
+          const msg = e && e.code === 'DEADLINE' ? `${e.message} (opt-in whole-call deadline ${DEADLINE_MS} ms set via env SKZ46_DEADLINE_MS). No result was produced; this is NOT a "no results" answer. Retry, or narrow the request.` : e.message;
           return reply(id, { content: [{ type: 'text', text: 'Error: ' + msg }], isError: true }); }
       }
       default: if (isReq) return fail(id, -32601, 'Method not found: ' + method);

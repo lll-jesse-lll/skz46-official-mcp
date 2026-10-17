@@ -5,7 +5,7 @@ description: Look up Sakurazaka46 (櫻坂46) official-site data via the skz46-of
 
 # Sakurazaka46 official data
 
-## `ask`: one-call entry point (v0.4.1; deadline/continuation v0.4.2)
+## `ask`: one-call entry point (v0.4.1; one-call history search v0.4.2)
 
 `ask {query, date_range?, before?}` is listed first and is the recommended entry point. It parses the question with fixed rules, with no model and no guessing: fan terms (音番, 見面會/ミーグリ 第N部 + city, ブログ/部落格, N單 / 第N張單曲 / Nth シングル, C位/センター, 站位/選拔, 周邊/グッズ 有貨嗎/在庫, 行程/スケジュール, 電視/ラジオ/雜誌, 新聞), member names and nicknames (incl. kanji variants 島/嶋, 崎/﨑 and zh spellings), and JST dates (今天, 明天, 這週, 下週, 下個月, N月, M/D). It then calls the matching tool or tools and returns `{interpreted_as:{intent, params, members, dates, notes}, confidence, ambiguous, result, next}`. If the intent or member is ambiguous (e.g. "遠藤 blog"), it returns `candidates` and calls nothing.
 - Meet&greet with a city or 第N部: reads at most 3 matching event pages and returns only the matching sessions.
@@ -23,10 +23,9 @@ description: Look up Sakurazaka46 (櫻坂46) official-site data via the skz46-of
   - **Venues:** `server/venues.json` maps about 40 major venues (Osaka, Tokyo, Kanagawa, Saitama, Chiba, Aichi, Fukuoka, Hokkaido, Miyagi, Hiroshima, Hyogo, Kyoto, Kagawa) and their aliases to city/prefecture. The venue is read from schedule 【会場】 lines and from live pages (### 会場 / 会場・日程; up to 4 upcoming pages are read). Items carry `venue`, `venue_raw`, `city` and `prefecture`. A query matches on city OR venue, and venue names work directly (e.g. "京セラ ライブ").
 
   - **Past fallback covers all history** (schedule back to 2020-10, LIVE + ARCHIVE pages; the meet&greet list API is already complete). Results are newest first, capped (3 shows for live, 10 items for schedule), and labeled `is_past: true` with a "no upcoming" note. Multi-day shows are merged into `dates[]`. Tour legs are matched to the date via 《県》venue blocks. Cost: about 1 s per month walked back.
-  - **Deadline (v0.4.2):** a call stops after about 45 s. A history search cut short returns `truncated_by_deadline: true`, `searched_range: {from, to}` and `history_complete: false`. Then:
-    - Do **not** tell the user "there is none". Say which months were searched (e.g. "2025-01 to 2026-10, nothing found yet").
-    - To search older months, call the `next` hint: `ask {query, before: <continue_before>}`. Repeat until a match is found or `history_complete: true`.
+  - **One call (v0.4.2):** the search runs until it finds enough or reaches 2020-10, so wait for it (a city with no show at all can take a few minutes). Results say `searched_range` and `history_complete`.
     - Only `history_complete: true` with no match means "no match in all history since 2020-10".
+    - If `truncated: true` (upstream kept failing, or the host set `SKZ46_DEADLINE_MS`), do **not** say "there is none": say which months were searched, and call the `next` hint `ask {query, before: <continue_before>}` to continue.
 
 Every result also has `next`: suggested follow-up calls `{tool, params, why}` (e.g. list → detail), or `null`.
 
@@ -59,8 +58,8 @@ Offline eval: `node test/eval.mjs` (54 fan queries + 10 live_type cases in `test
   - `variations` lists only the sizes or colours still offered. A size named in the description but missing from `variations` is no longer offered, so it's probably sold out.
   - Never state stock quantities from `stock_flg`; it is not a count.
   - **"Is it still in stock / how many left?"** → `check_store_stock` with `product_id` (and `classcategory_id1` for a size or colour, from `get_store_product`).
-    - By default it adds 1 to a temporary guest cart on the live store, then empties it: that answers "in stock or not". Report `available`.
-    - Only when the user asks "how many / is there a lot", pass `probe_quantity: 50` and say "at least `at_least`" (50 means 50 or more). Give an exact number only when `exact` is not null.
+    - It tries to add 50 (the per-order cap) to a temporary guest cart on the live store, then empties it. Plain "in stock or not" is already in `get_store_product`; use this tool for "how much is left / is it almost gone".
+    - Use `stock_level` / `summary`: `plenty` → say "at least 50 left" (exact count not public); `low` → say "only `remaining_exact` left" (buy soon); `sold_out` → sold out.
     - Check `cart_cleanup`. It should be `ok`; if it is `failed`, mention that the temporary guest cart could not be confirmed empty (it reserves no stock and expires).
     - Adding to cart does not reserve stock, so the answer can change at any moment.
     - Use it only when the user actually asks about stock, and don't call it repeatedly.

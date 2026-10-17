@@ -741,7 +741,7 @@
         "params": {
           "product_id": "114889"
         },
-        "why": "in-stock check (guest cart probe, quantity 1; probe_quantity up to 50 for at-least-N)"
+        "why": "how much is left: plenty (>=50) vs exactly N (guest cart probe)"
       }
     ]
   },
@@ -750,20 +750,23 @@
     "name": "【通常配送】6th Anniversary ロゴTシャツ/ホワイト",
     "classcategory_id1": "2802",
     "classcategory_id2": null,
-    "requested_quantity": 1,
+    "requested_quantity": 50,
     "probe": "guest_cart",
     "available": true,
-    "at_least": 1,
-    "exact": null,
-    "exact_basis": null,
+    "stock_level": "low",
+    "remaining_exact": 25,
+    "summary": "Low stock: exactly 25 remaining (the store cut the requested 50 to 25).",
+    "at_least": 25,
+    "exact": 25,
+    "exact_basis": "cart reduced the requested 50 to 25",
     "capped_by_order_limit": false,
     "order_limit": null,
     "variation_listed_on_page": true,
-    "message_raw": null,
+    "message_raw": "※「【通常配送】6th Anniversary ロゴTシャツ/ホワイト」はお一人様25点までです。",
     "cart_line": {
       "name": "【通常配送】6th Anniversary ロゴTシャツ/ホワイト",
       "variation": "サイズ：S",
-      "quantity": 1,
+      "quantity": 25,
       "form": "form183",
       "cart_no": "1"
     },
