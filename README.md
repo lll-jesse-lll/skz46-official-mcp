@@ -1,6 +1,23 @@
-# skz46-official (v0.4.1)
+# skz46-official (v0.4.2)
 
 Agent Plugin (Agent Plugins 1.0.0 format) that wraps the **public, no-login** JSON endpoints of https://sakurazaka46.com in a zero-dependency stdio MCP server (Node ≥ 18, uses the built-in `fetch`).
+
+## v0.4.2 changes (read this if you upgrade)
+**Behaviour changes (may affect existing callers, e.g. SKZ HUB):**
+- **`list_news` now returns short items by default.** Defaults: `limit: 20`, `include_content: false`. Items have no `content`; they carry `content_excerpt` (plain text, about 120 chars) instead. All other fields are unchanged (`id`, `title`, `caption`, `url`, `published_at`, `pubdate`, `category`, `category_label`, `tags`, `thumbnail`).
+  - To get the v0.4.1 output back, pass `include_content: true, limit: 200`. Responses above `max_bytes` (default 600,000 bytes of item JSON, env `SKZ46_MAX_RESPONSE_BYTES`) are cut at a whole-item boundary with `truncated: true` and a `next` hint (`offset`). Pass a larger `max_bytes` (up to 20,000,000) to avoid the cut.
+  - New result fields: `limit`, `returned`, `include_content`, `has_more`, `truncated`, `truncated_reason`, `items_bytes`, `next` (next page).
+  - `raw: true` is unchanged: `raw[].body` is the full upstream response (all items, full HTML) with its sha256, never cut. The upstream URL is the same as before for the same `dy`/`category`/`offset`.
+- **`check_store_stock` adds 1 by default** (was 50). The default answers "in stock: yes/no". Pass `probe_quantity` (2–50) to ask "at least N"; 50 reproduces the old behaviour.
+  - Cleanup is reported, never assumed: `cart_cleanup: 'ok' | 'failed' | 'not_needed'`, `cleanup_attempts` (up to 3 delete rounds, then a final check), `cleanup_error`, `cleanup_note`. `cart_emptied` stays (true only when the store showed its empty-cart message).
+- **`get_blog_post` / `get_meet_greet_event` cap `body_text` at 20,000 chars** by default (`max_chars` up to 100,000), with `body_truncated` and `body_length`. `get_special_page` takes `max_chars` too, and always returns `truncated` (boolean) and `text_length` (full length).
+
+**Fixes:**
+- **Every tool call has a deadline** (default 45 s, env `SKZ46_DEADLINE_MS`), counted from the start of the call and including the wait in the shared 1 s request queue. Each upstream request also has a timeout (default 15 s, env `SKZ46_FETCH_TIMEOUT_MS`, via `AbortSignal`), shortened to the time left before the deadline.
+  - `ask` past-history searches (schedule past fallback, live/concert past walk) stop at the deadline and return what they found with `truncated_by_deadline: true`, `searched_range: {from, to}` (months actually covered), `history_start`, `history_complete`, `stop_reason`, `continue_before` and a `next` hint `{tool: 'ask', params: {query, before: 'YYYY-MM'}}`. Calling it continues with older months, so all history (back to 2020-10) is still reachable over several calls. A truncated search never claims "no results"; its note says which months were not searched.
+  - Other tools that hit the deadline or a timeout return an error that says so (and that it is not a "no results" answer). `list_special_pages` returns the pages it already read with `truncated: true` instead.
+  - `ask` reuses the special-page list for 10 minutes (it costs ~9 requests). Direct `list_special_pages` calls always fetch.
+- **stdout is flushed before exit** when the client closes stdin, so the last large reply is never cut.
 
 ## Data shapes
 ```ts
@@ -18,7 +35,8 @@ type OfficialPost = {
   category_label?: string | null; // label as printed on /s/s46/news/list (リリース, グッズ, イベント, メディア, チケット, オーディション, ミート＆グリート, その他, ファンクラブ)
   caption?: string | null;
   tags?: string[] | null;  // upstream member-id tags (only some items have them; others are null)
-  content?: string | null; // article HTML; included by default, include_content:false omits it
+  content?: string | null; // article HTML; only with include_content:true (default false since v0.4.2)
+  content_excerpt?: string | null; // plain-text start of content (~120 chars); given when include_content is false
   thumbnail?: string | null; // absolute URL
 };
 type MeetGreetEvent = { code: string; date: string /* YYYY-MM-DD */; title: string;
@@ -53,7 +71,7 @@ type DiscographyDetail = { code: string; url: string; title: string; type?: stri
   sonymusic_error?: string };
 ```
 
-The list tools return `{ total, offset?, items }`. `total` is the upstream `count` for news and blog, and `items.length` for the other two tools.
+The list tools return `{ total, offset?, items }`. `total` is the upstream `count` for news and blog, and `items.length` for the other two tools. `list_news` (v0.4.2) also returns `limit, returned, include_content, has_more, truncated, truncated_reason, items_bytes, next`. Note that the MCP reply carries the JSON twice (`content[0].text` and `structuredContent`), so the bytes on the wire are about 2× `items_bytes`.
 
 Normalization:
 - Relative paths are turned into `https://sakurazaka46.com/...`.
@@ -82,25 +100,26 @@ The source is the official goods store at `store.plusmember.jp/sakurazaka46`. It
 - `in_stock` is `true` when the add-to-cart button is shown and there is no SOLD OUT label. Otherwise it is omitted.
 - **Sold-out variations are removed from the size/colour selector.** Example: the stadium jumper 114894 lists sizes M/L/XL in its description, but the selector offers only XL. Adding size M to the cart is refused with 「…/M」は売り切れました. So `variations[]` lists only purchasable variations, each with `in_stock: true`. Sold-out variations are not listed and are never invented.
 - `stock_flg` is the store's raw, undocumented flag. Observed values: 2 on in-stock items, and 0 on fully sold-out items and on 114894, which had only XL left. It is passed through raw and is **not** a count.
-- **Numeric stock counts are not public.** A guest cart caps every line at the per-order sale limit (「一度に購入できる数量は50までです」), so a quantity probe shows "≥ 50" for normal stock. Since v0.4.1, `check_store_stock` runs this probe on request (see below).
+- **Numeric stock counts are not public.** A guest cart caps every line at the per-order sale limit (「一度に購入できる数量は50までです」), so a quantity probe shows "≥ 50" for normal stock. Since v0.4.1, `check_store_stock` runs this probe on request (see below); since v0.4.2 it adds 1 by default and 50 only with `probe_quantity: 50`.
 
 Image URLs from store tools go through the shared filter with the store hosts allowed: `store.plusmember.jp`, `storage-store.plusmember.jp` and `image.emtg.jp`. The store's `user_data/.../img/common` chrome is dropped, including the `cover.gif` lazy-load placeholder; the real thumbnail comes from the background-image.
 
-### Cart stock probe: `check_store_stock` (v0.4.1)
+### Cart stock probe: `check_store_stock` (v0.4.1, quantity/cleanup reporting v0.4.2)
 **This tool creates a guest cart session on the live store.** It is enabled by default. Set `SKZ46_DISABLE_CART_PROBE=1` in the server's environment to disable it; calls then return a clear error and make no request.
 
 Each call does the following:
 1. Uses a fresh, isolated cookie jar (a new guest session) and opens the product page.
 2. If the product shows SOLD OUT or has no add-to-cart button, it answers `available: false` without touching the cart.
-3. Otherwise it adds **50** (the store's per-order cap) of the product or variation and reads the cart line and messages.
-4. In a `finally` block it **always deletes every cart line and re-reads the cart to verify it is empty** (`cart_emptied`).
+3. Otherwise it adds **`probe_quantity`** of the product or variation (default **1** = in stock yes/no; 2–50 by explicit opt-in, 50 being the store's per-order cap) and reads the cart line and messages.
+4. It then **always deletes every cart line and re-reads the cart**, up to 3 delete rounds plus a final check, and reports the outcome as `cart_cleanup: 'ok' | 'failed'` (`'not_needed'` when the cart was never touched). 'ok' requires the store's own empty-cart message. Cleanup requests are not cut by the call deadline (they keep the 1 s spacing and the request timeout). If cleanup fails, the cart belongs to a throwaway guest session whose cookies are discarded; it reserves no stock and expires on the store side.
+   If the probe itself fails (e.g. a timeout while adding), the error message still states `cart_cleanup=…`.
 5. It never goes to checkout, never logs in and never sends personal data. A call is about 5–6 requests, each at least 1 s apart.
 
-`{ product_id, name, classcategory_id1, classcategory_id2, requested_quantity: 50, probe: 'guest_cart', available, at_least, exact, exact_basis, capped_by_order_limit, order_limit, variation_listed_on_page, message_raw, cart_line, cart_emptied, cart_touched, cleanup_error, reservation_note }`
-- `at_least`: how many the cart accepted. 50 means "at least 50"; `capped_by_order_limit` is then true and `exact` is `null`.
+`{ product_id, name, classcategory_id1, classcategory_id2, requested_quantity, probe: 'guest_cart', available, at_least, exact, exact_basis, capped_by_order_limit, order_limit, variation_listed_on_page, message_raw, cart_line, cart_touched, cart_cleanup, cart_emptied, cleanup_attempts, cleanup_error, cleanup_note, reservation_note }`
+- `at_least`: how many the cart accepted (at most `requested_quantity`). With the default 1 it only means "in stock". With `probe_quantity: 50`, 50 means "at least 50"; `capped_by_order_limit` is then true and `exact` is `null`.
 - `exact`:
   - It is set to 0 when the store says 売り切れました, e.g. 114894 size M.
-  - It is set to the accepted quantity when the cart cut the requested 50 to fewer. That behaviour was **not observed**: every in-stock variation probed on 2026-10-16 accepted 50. In EC-CUBE 2, the cart lowers an over-limit quantity to the smaller of stock and the sale limit, so a smaller number would mean stock.
+  - It is set to the accepted quantity when the cart cut the requested quantity to fewer. On 2026-10-16 every in-stock variation probed accepted 50; on 2026-10-17 (v0.4.2 smoke test) a request for 50 of 114889 size S was cut to 26, so the reduction does happen. In EC-CUBE 2, the cart lowers an over-limit quantity to the smaller of stock and the sale limit, so a smaller number means stock (unless `order_limit` says the sale limit is that number).
 - **Reservation:** adding to cart does **not** reserve stock (high confidence).
   - Every product page says 「ご注文確定するまでは、カートに商品が入っていても在庫は確保されていません。ご注文手続き中に在庫切れとなる場合があります。」 (until the order is confirmed, items in the cart are not secured).
   - In EC-CUBE 2 the stock is decremented only when an order is placed, not when an item is added to the cart.
@@ -109,7 +128,7 @@ Each call does the following:
 ### SpecialPageRef / SpecialPage (v0.3.0)
 `SpecialPageRef = { slug, title?, date?, url, source: 'live'|'archive', thumbnail? }` comes from `list_special_pages`. Items are de-duplicated by slug; when a page is on both lists, the live entry wins.
 `SpecialPage = { slug, url, title?, text, truncated?, text_length?, images?: string[], links?: {url, text?, external?}[], videos?: {provider:'youtube'|'brightcove', id, url?, account?}[] }`.
-`text` is plain text from the page `<body>`. Headings become `#`/`##` lines; scripts, styles, nav, the site header, footer, cookie banner and share widgets are removed. It is capped at 20,000 characters, with `truncated: true` when cut. No page-specific fields are parsed, because the pages are hand-built landing pages.
+`text` is plain text from the page `<body>`. Headings become `#`/`##` lines; scripts, styles, nav, the site header, footer, cookie banner and share widgets are removed. It is capped at `max_chars` (default 20,000), with `truncated: true` when cut and `text_length` = the full length (v0.4.2: both always present). No page-specific fields are parsed, because the pages are hand-built landing pages.
 
 ### Image filter (all tools, v0.3.0)
 `server/images.js` handles every image the tools return (`images[]`, `thumbnail`, `jacket`, `avatar`/`card`/`cheki`, `image`):
@@ -134,7 +153,7 @@ Each call does the following:
 
 ## Hub-compat conventions (v0.4.0)
 - **Explicit nulls:** when a field is empty at the source or could not be parsed, it is returned as `null` instead of being left out. This applies to every tool. Empty strings become `null`. Optional lists are `null` when empty, while result containers (`items`) stay `[]`.
-  - Exceptions: `content` is left out when `include_content: false`, and `raw` only appears when requested.
+  - Exceptions: `list_news` leaves `content` out unless `include_content: true` (and then leaves `content_excerpt` out), and `raw` only appears when requested.
 - **`raw: true` (every tool):** the result also has `raw: [{ url, method, http_status, content_type, fetched_at, sha256, body }]`, with one entry per upstream request the call made, in order.
   - `fetched_at` is ISO 8601 UTC.
   - `sha256` is the hex digest of the UTF-8 body text exactly as received. `body` is that raw text.
@@ -143,14 +162,14 @@ Each call does the following:
 
 ## `ask`: one-call entry point (v0.4.1)
 
-`ask {query, date_range?}` is listed first and is the recommended entry point. It parses the question with fixed rules, with no model and no guessing: fan terms (音番, 見面會/ミーグリ 第N部 + city, ブログ/部落格, N單 / 第N張單曲 / Nth シングル, C位/センター, 站位/選拔, 周邊/グッズ 有貨嗎/在庫, 行程/スケジュール, 電視/ラジオ/雜誌, 新聞), member names and nicknames (incl. kanji variants 島/嶋, 崎/﨑 and zh spellings), and JST dates (今天, 明天, 這週, 下週, 下個月, N月, M/D). It then calls the matching tool or tools and returns `{interpreted_as:{intent, params, members, dates, notes}, confidence, ambiguous, result, next}`. If the intent or member is ambiguous (e.g. "遠藤 blog"), it returns `candidates` and calls nothing.
+`ask {query, date_range?, before?}` is listed first and is the recommended entry point. It parses the question with fixed rules, with no model and no guessing: fan terms (音番, 見面會/ミーグリ 第N部 + city, ブログ/部落格, N單 / 第N張單曲 / Nth シングル, C位/センター, 站位/選拔, 周邊/グッズ 有貨嗎/在庫, 行程/スケジュール, 電視/ラジオ/雜誌, 新聞), member names and nicknames (incl. kanji variants 島/嶋, 崎/﨑 and zh spellings), and JST dates (今天, 明天, 這週, 下週, 下個月, N月, M/D). It then calls the matching tool or tools and returns `{interpreted_as:{intent, params, members, dates, notes}, confidence, ambiguous, result, next}`. If the intent or member is ambiguous (e.g. "遠藤 blog"), it returns `candidates` and calls nothing.
 - Meet&greet with a city or 第N部: reads at most 3 matching event pages and returns only the matching sessions.
 - Stock questions: searches the store. If exactly one product matches, it returns `get_store_product` (public in_stock) and suggests `check_store_stock` in `next`. It never runs the cart probe by itself.
 - Center: calls `get_formation` with `infer_center: true` and returns a per-song `centers[]` with source/confidence (official evidence = high, front-row middle = medium).
 
 - **Upcoming first (JST).** Meet&greet, schedule and live/concert questions only look at future events, unless the query clearly asks about the past: a single number (N單/第N枚), 上次/之前/去年/過去/已經, or an explicit past date. A schedule question with no date covers the next 30 days.
   - Meet&greet with no upcoming match: returns `none_upcoming: true`, an empty `matches`, and `latest_past_event` + `next_hint` as a pointer only, not as the answer.
-  - Live/concert questions (e.g. "大阪演唱會", intent `live`): checks schedule items labeled ライブ for the next 3 months plus LIVE special pages, matching the city in kanji or romaji (OSAKA). If nothing upcoming matches, it returns past matches from the last 6 months, each marked `is_past: true`, with a "no upcoming" note. It also lists upcoming live pages that name no city in `other_upcoming_live_without_city_match`.
+  - Live/concert questions (e.g. "大阪演唱會", intent `live`): checks schedule items labeled ライブ for the next 3 months plus LIVE special pages, matching the city in kanji or romaji (OSAKA). If nothing upcoming matches, it returns past matches (walking back over all history, see below), each marked `is_past: true`, with a "no upcoming" note. It also lists upcoming live pages that name no city in `other_upcoming_live_without_city_match`.
 
   - **Solo vs festival (heuristic, `live_type_source: 'heuristic'`):** each live item gets a `live_type`. `festival` means a multi-artist event (フェス/FESTIVAL, GIGANTIC, ROCK IN JAPAN, COUNTDOWN JAPAN/CDJ, TIF, アラバキ, SUMMER SONIC, JAPAN JAM, 音楽祭, …). `solo` means Sakurazaka46's own lives (櫻坂46「…」, BACKS LIVE, ANNIVERSARY LIVE, ARENA TOUR/ツアー, 期生LIVE, …). Anything else is `unknown`.
     - 演唱會/公演/ライブ/ツアー queries are answered with solo (and unknown) items only. 音樂節/フェス/festival names are answered with festivals only.
@@ -158,7 +177,7 @@ Each call does the following:
 
   - **Venues:** `server/venues.json` maps about 40 major venues (Osaka, Tokyo, Kanagawa, Saitama, Chiba, Aichi, Fukuoka, Hokkaido, Miyagi, Hiroshima, Hyogo, Kyoto, Kagawa) and their aliases to city/prefecture. The venue is read from schedule 【会場】 lines and from live pages (### 会場 / 会場・日程; up to 4 upcoming pages are read). Items carry `venue`, `venue_raw`, `city` and `prefecture`. A query matches on city OR venue, and venue names work directly (e.g. "京セラ ライブ").
 
-  - **Past fallback covers all history** (schedule back to 2020-10, LIVE + ARCHIVE pages; the meet&greet list API is already complete). Results are newest first, capped (3 shows for live, 10 items for schedule), and labeled `is_past: true` with a "no upcoming" note. Multi-day shows are merged into `dates[]`. Tour legs are matched to the date via 《県》venue blocks. Cost: about 1 s per month walked back; once at least one match is found it stops after about 50 s.
+  - **Past fallback covers all history** (schedule back to 2020-10, LIVE + ARCHIVE pages; the meet&greet list API is already complete). Results are newest first, capped (3 shows for live, 10 items for schedule), and labeled `is_past: true` with a "no upcoming" note. Multi-day shows are merged into `dates[]`. Tour legs are matched to the date via 《県》venue blocks. Cost: about 1 s per month walked back. The walk stops when enough is found, at 2020-10, or at the call deadline (45 s); results then carry `searched_range`, `history_complete`, `truncated_by_deadline` and `next` → `ask {query, before}` to continue older (v0.4.2).
 
 Every result also has `next`: suggested follow-up calls `{tool, params, why}` (e.g. list → detail), or `null`.
 
@@ -167,20 +186,20 @@ Offline eval: `node test/eval.mjs` (54 fan queries + 10 live_type cases in `test
 ## Tools
 | Tool | Args | Upstream |
 |---|---|---|
-| `list_news` | `dy?` (YYYY\|YYYYMM\|YYYYMMDD), `category?`, `offset?`, `include_content?`=true | `/s/s46/api/json/news?dy=&cd=&st=` |
+| `list_news` | `dy?` (YYYY\|YYYYMM\|YYYYMMDD), `category?`, `offset?`, `limit?`=20 (≤200), `include_content?`=false, `max_bytes?`=600000 | `/s/s46/api/json/news?dy=&cd=&st=` |
 | `list_blog_posts` | `member_id?`, `offset?` | `/s/s46/api/json/diary?cd=blog&member_id=&st=` (no body) |
 | `list_meet_greet_events` | — | `/s/s46/api/list/shakehands_list` |
 | `list_store_categories` | — | store.plusmember.jp/sakurazaka46 menu (HTML) |
 | `list_store_products` | `category_id?`, `keyword?`, `page?` | `products/list.php` (GET page 1; POST `pageno` form for later pages) |
 | `get_store_product` | `product_id` | `products/detail.php` (HTML; hidden `div.__items__*` block + selectors) |
-| `check_store_stock` | `product_id`, `classcategory_id1?`, `classcategory_id2?` | **live guest-cart probe** on store.plusmember.jp (enabled by default; set `SKZ46_DISABLE_CART_PROBE=1` to turn it off) |
+| `check_store_stock` | `product_id`, `classcategory_id1?`, `classcategory_id2?`, `probe_quantity?`=1 (≤50) | **live guest-cart probe** on store.plusmember.jp (enabled by default; set `SKZ46_DISABLE_CART_PROBE=1` to turn it off) |
 | `resolve_member` | `query` | static table `server/members.json`, built from the official member list and profiles (31 current members: id, name, kana, romaji, generation, derived zh aliases) |
 | `list_special_pages` | — | LIVE list + all ARCHIVE list pages (HTML) → `SpecialPageRef[]` |
-| `get_special_page` | `slug` | `/s/s46/page/<slug>` (HTML) → `SpecialPage` |
-| `get_meet_greet_event` | `code` | `/s/s46/diary/detail/<code>?cd=event_page` (HTML) → `MeetGreetDetail` |
+| `get_special_page` | `slug`, `max_chars?`=20000 | `/s/s46/page/<slug>` (HTML) → `SpecialPage` |
+| `get_meet_greet_event` | `code`, `max_chars?`=20000 | `/s/s46/diary/detail/<code>?cd=event_page` (HTML) → `MeetGreetDetail` |
 | `get_schedule` | `date?` YYYY-MM-DD \| `month?` YYYY-MM, `category?` | `/s/s46/media/list?dy=` HTML: embedded `var scheduleEvents=[…]` + modal blocks |
 | `get_formation` | `single?` (int), `list?` | `/s/s46/page/formation` HTML (`div.list_wrap`) |
-| `get_blog_post` | `id` | `/s/s46/diary/detail/<id>?cd=blog` HTML (`div.box-article`) |
+| `get_blog_post` | `id`, `max_chars?`=20000 | `/s/s46/diary/detail/<id>?cd=blog` HTML (`div.box-article`) |
 | `list_discography` | — | `/s/s46/artist/00/discography` HTML (`li.box`) |
 | `get_discography` | `code` | `/s/s46/discography/<code>` HTML **+ third-party** `https://www.sonymusic.co.jp/json/v2/artist/sakurazaka46/discography/<code>` (JSONP, `callback(...)` stripped) |
 | `list_greeting_cards` | `member_id?` (filtered client-side; `ct` is never sent because it empties the result) | `/s/s46/api/list/greeting` |
@@ -201,6 +220,7 @@ Notes on the v0.2.0 tools:
 Upstream behaviour:
 - News and blog return at most 200 items per request. `offset` maps to the upstream `st` (0-based).
 - Calls to upstream are spaced at least 1 s apart.
+- Each tool call has a deadline (`SKZ46_DEADLINE_MS`, default 45000) and each request a timeout (`SKZ46_FETCH_TIMEOUT_MS`, default 15000).
 - Errors come back as MCP `isError` results: non-200 status, non-JSON body, or `{"result":"NG"}`.
 
 ## Install
@@ -235,10 +255,13 @@ server/index.js      MCP server (JSON-RPC 2.0: initialize, tools/list, tools/cal
 server/html-tools.js HTML-scraping tools (schedule, formation, blog post, discography)
 server/center-evidence.json  hand-verified official center citations
 skills/sakurazaka46-official/SKILL.md
-test/smoke.mjs       end-to-end test against the live site
+test/smoke.mjs       end-to-end test against the live site (also runs eval.mjs and offline.mjs)
+test/offline.mjs     offline tests with a mocked fetch (deadline, timeout, news size, cart probe, EOF drain)
+test/mock-fetch.cjs  test-only fetch mock preload
 ```
 
 ## Test
+`node test/offline.mjs` runs the mocked (no network) suite in about 35 s. `node test/eval.mjs` runs the offline `ask` parser eval.
 `node test/smoke.mjs [command args...]` spawns the server (by default `node server/index.js`), runs initialize, ping and tools/list, then calls every tool against the live site. Examples:
 `node test/smoke.mjs npx -y --package=$PWD/skz46-official-mcp-0.1.0.tgz skz46-official-mcp` or `node test/smoke.mjs skz46-official-mcp`.
 

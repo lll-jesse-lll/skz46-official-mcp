@@ -160,24 +160,62 @@ function parse(query, opts = {}) {
   return out;
 }
 
-module.exports = ({ tools }) => {
+const prevMonth = m => { let [y, mo] = m.split('-').map(Number); if (--mo < 1) { mo = 12; y--; } return `${y}-${pad(mo)}`; };
+const nextMonth = m => { let [y, mo] = m.split('-').map(Number); if (++mo > 12) { mo = 1; y++; } return `${y}-${pad(mo)}`; };
+
+module.exports = ({ tools, remainingMs = () => Infinity, DEADLINE_MS = 45000 } = {}) => {
   const call = (name, args) => tools[name].run(args);
   const inRange = (d, r) => d && d >= r.from && d <= r.to;
   const monthsOf = r => { const out = []; let [y, m] = r.from.split('-').map(Number); const [ty, tm] = r.to.split('-').map(Number);
     while (y < ty || (y === ty && m <= tm)) { out.push(`${y}-${pad(m)}`); if (++m > 12) { m = 1; y++; } if (out.length > 3) break; } return out; };
+  // list_special_pages is ~9 requests (LIVE + ARCHIVE pages); ask reuses it for 10 minutes. Direct tool calls always fetch.
+  let specialCache = null;
+  async function specialPages() {
+    if (specialCache && Date.now() - specialCache.at < 600e3) return specialCache.data;
+    const data = await call('list_special_pages', {}); if (!data.truncated_by_deadline) specialCache = { at: Date.now(), data }; return data; }
+  // Walk schedule months backwards from startMonth (inclusive) to HISTORY_START. visit(month) returns true when enough was found.
+  // Stops early on the call deadline / an upstream timeout or error and reports exactly which months were covered,
+  // so an empty result is never presented as "no results in all history".
+  async function walkBack(startMonth, visit) {
+    let month = startMonth, newest = null, oldest = null, stop = null, stopMsg = null;
+    while (month >= HISTORY_START) {
+      try { const enough = await visit(month); newest = newest || month; oldest = month; if (enough) { stop = 'enough'; break; } }
+      catch (e) { stop = e && e.code === 'DEADLINE' ? 'deadline' : e && e.code === 'TIMEOUT' ? 'upstream_timeout' : 'upstream_error'; stopMsg = e && e.message; break; }
+      month = prevMonth(month);
+    }
+    const complete = stop === null; // reached HISTORY_START
+    const truncated = stop !== null && stop !== 'enough';
+    const continue_before = complete ? null : (oldest || nextMonth(startMonth)); // exclusive cursor for the next call
+    return { searched_range: oldest ? { from: oldest, to: newest } : null, history_start: HISTORY_START, history_complete: complete,
+      stop_reason: stop || 'history_start_reached', stop_error: stopMsg, truncated_by_deadline: stop === 'deadline', truncated, continue_before,
+      deadline_ms: DEADLINE_MS };
+  }
+  const walkNote = (w, what) => {
+    const r = w.searched_range ? `${w.searched_range.from}..${w.searched_range.to}` : 'no month';
+    if (w.truncated) return `Search stopped early (${w.stop_reason}) after covering ${r}; months before ${w.continue_before} (down to ${HISTORY_START}) were NOT searched yet, so this is not a complete "no results" answer for ${what}. Call next to continue.`;
+    if (w.history_complete) return `Searched all history ${r} (back to ${HISTORY_START}).`;
+    return `Searched ${r}; enough matches found. Older months (before ${w.continue_before}) not searched; call next for older ones.`;
+  };
+  const jstTodayStr = () => ymd(jstToday(new Date()));
   async function schedule(p) {
-    const { date_range, when, ...rest } = p;
-    if (!date_range) return call('get_schedule', rest);
-    let items = [];
-    for (const month of monthsOf(date_range)) items.push(...(await call('get_schedule', { ...rest, month })).items);
-    items = items.filter(i => inRange(i.date, date_range));
-    if (items.length || when !== 'upcoming') return { total: items.length, items, date_range };
-    // nothing upcoming: walk back over all history (newest first), cap 10, labeled past
-    const today = date_range.from; const past = []; const t = new Date(today + 'T00:00:00Z');
-    for (let i = 0; past.length < 10; i++) { const month = ymd(new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - i, 1))).slice(0, 7); if (month < HISTORY_START) break;
-      const its = (await call('get_schedule', { ...rest, month })).items.filter(x => x.date < today).sort((a, b) => b.date.localeCompare(a.date));
-      for (const x of its) if (past.length < 10) past.push({ ...x, is_past: true }); }
-    return { total: 0, items: [], date_range, none_upcoming: true, past_fallback: past, note: 'No upcoming match (JST); past_fallback lists the most recent PAST matches (is_past: true), newest first.' };
+    const { date_range, when, before, ...rest } = p;
+    const memo = new Map(); const sched = month => { if (!memo.has(month)) memo.set(month, call('get_schedule', { ...rest, month })); return memo.get(month); };
+    if (!before) {
+      if (!date_range) return call('get_schedule', rest);
+      let items = [];
+      for (const month of monthsOf(date_range)) items.push(...(await sched(month)).items);
+      items = items.filter(i => inRange(i.date, date_range));
+      if (items.length || when !== 'upcoming') return { total: items.length, items, date_range };
+    }
+    // nothing upcoming (or a continuation): walk back over all history (newest first), cap 10, labeled past
+    const today = date_range && when === 'upcoming' ? date_range.from : jstTodayStr(); const past = [];
+    const w = await walkBack(before ? prevMonth(before) : today.slice(0, 7), async month => {
+      const its = (await sched(month)).items.filter(x => x.date < today).sort((a, b) => b.date.localeCompare(a.date));
+      for (const x of its) if (past.length < 10) past.push({ ...x, is_past: true });
+      return past.length >= 10; });
+    const head = before ? `Continuation (months before ${before}).` : 'No upcoming match (JST).';
+    return { total: 0, items: [], date_range: date_range || null, none_upcoming: before ? null : true, continued_before: before || null, past_fallback: past, ...w,
+      note: `${head} past_fallback lists the most recent PAST matches (is_past: true), newest first. ` + walkNote(w, 'the past schedule') };
   }
   async function meetGreet(p) {
     const list = await call('list_meet_greet_events', {});
@@ -217,54 +255,59 @@ module.exports = ({ tools }) => {
   }
   // Live/concerts: upcoming first (schedule label ライブ for the next 3 months + LIVE special pages); past only as labeled fallback.
   async function live(p) {
-    const today = p.from || ymd(jstToday(new Date()));
+    const today = p.from || jstTodayStr();
     const keys = p.city ? (CITIES.find(c => c[0] === p.city) || [p.city, [p.city]])[1].map(k => k.toLowerCase()) : [];
     const cityOk = x => { if (p.venue) return x.venue === p.venue || norm(JSON.stringify(x)).includes(norm(p.venue));
       if (!p.city) return true; if (x.city) return x.city === p.city || keys.includes(x.city.toLowerCase()) || keys.some(k => (x.prefecture || '').startsWith(k));
       return (t => keys.some(k => t.includes(k)))(JSON.stringify(x).toLowerCase()); };
     const withVenue = x => { const v = legVenue(x.description, x.date) || parseVenue(x.description) || findVenue(`${x.title || ''} ${x.description || ''}`); return v ? { ...x, venue: v.venue, venue_raw: v.venue_raw || null, city: v.city, prefecture: v.prefecture } : { ...x, venue: null, city: null, prefecture: null }; };
     const pageVenue = async x => { try { const pg = await call('get_special_page', { slug: x.slug }); const v = parseVenue(pg.text); return v ? { ...x, venue: v.venue, venue_raw: v.venue_raw, city: v.city, prefecture: v.prefecture } : { ...x, venue: null, city: null, prefecture: null }; } catch { return { ...x, venue: null, city: null, prefecture: null }; } };
-    const rng = p.date_range || { from: today, to: ymd(addDays(jstToday(new Date()), 92)) };
-    let sched = [];
-    for (const month of monthsOf(rng)) sched.push(...(await call('get_schedule', { month, label: 'ライブ' })).items);
     const want = p.live_type || 'solo';
     const typed = x => withVenue({ ...x, live_type: liveType(x), live_type_source: 'heuristic' });
-    const allSched = sched.filter(i => inRange(i.date, rng) && cityOk(i)).map(typed);
-    sched = allSched.filter(i => want === 'festival' ? i.live_type === 'festival' : i.live_type !== 'festival');
-    let allPages = (await call('list_special_pages', {})).items.filter(x => x.source === 'live').map(x => ({ ...x, live_type: liveType(x), live_type_source: 'heuristic' }));
-    // read venue from upcoming live pages (at most 4 page reads)
-    { const up = allPages.filter(x => !x.date || x.date >= today).slice(0, 4); const done = new Map();
-      for (const x of up) done.set(x.slug, await pageVenue(x));
-      allPages = allPages.map(x => done.get(x.slug) || withVenue(x)); }
-    const pages = allPages.filter(x => cityOk(x) && (want === 'festival' ? x.live_type === 'festival' : x.live_type !== 'festival'));
+    const memo = new Map(); const liveMonth = month => { if (!memo.has(month)) memo.set(month, call('get_schedule', { month, label: 'ライブ' }).then(r => r.items)); return memo.get(month); }; // each month is fetched once per call
     const festHint = list => want === 'solo' && list.length ? { festival_hint: { note: 'Multi-artist festivals (not Sakurazaka46 solo lives); hint only, not the answer.', items: list.slice(0, 5) } } : {};
-    const upPages = pages.filter(x => !x.date || x.date >= today);
-    if (p.when === 'upcoming' && !sched.length && !upPages.length && p.city) {
-      const other = allPages.filter(x => x.date && x.date >= today);
-      if (other.length) p._other = other.slice(0, 5); }
-    const upFest = allSched.filter(i => i.live_type === 'festival');
-    if (p.when !== 'upcoming' || sched.length || upPages.length) return { live_type: want, schedule: sched, special_pages: (p.when === 'upcoming' ? upPages : pages).slice(0, 10), is_past: false, ...(sched.length || upPages.length ? {} : festHint(upFest)) };
-    const past = pages.filter(x => x.date && x.date < today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5).map(x => ({ ...x, is_past: true }));
-    let pastSched = [];
-    { const t = jstToday(new Date()); 
-      // Walk back month by month (newest first) over all available history, stop once 3 matching past shows are found.
-      const shows = new Map(); var pastFest = []; const t0 = Date.now();
-      for (let i = 0; shows.size < 3 && !(shows.size >= 1 && Date.now() - t0 > 50000); i++) { // soft budget: once >=1 found, stop after ~50s
-        const month = ymd(new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - i, 1))).slice(0, 7);
-        if (month < HISTORY_START) break;
-        let its; try { its = (await call('get_schedule', { month, label: 'ライブ' })).items; } catch { break; }
-        for (const it of its.filter(i => i.date < today).map(typed).filter(cityOk).sort((a, b) => b.date.localeCompare(a.date))) {
-          if (it.live_type === 'festival') { pastFest.push({ ...it, is_past: true }); if (want !== 'festival') continue; }
-          else if (want === 'festival') continue;
-          const key = `${it.title}|${it.venue || ''}`; const prev = shows.get(key);
-          if (prev) { if (!prev.dates.includes(it.date)) prev.dates.push(it.date); }
-          else if (shows.size < 3) shows.set(key, { ...it, description: undefined, dates: [it.date], is_past: true });
-        }
+    let past = [], upFest = [];
+    if (!p.before) {
+      const rng = p.date_range || { from: today, to: ymd(addDays(jstToday(new Date()), 92)) };
+      let sched = [];
+      for (const month of monthsOf(rng)) sched.push(...(await liveMonth(month)));
+      const allSched = sched.filter(i => inRange(i.date, rng) && cityOk(i)).map(typed);
+      sched = allSched.filter(i => want === 'festival' ? i.live_type === 'festival' : i.live_type !== 'festival');
+      let allPages = (await specialPages()).items.filter(x => x.source === 'live').map(x => ({ ...x, live_type: liveType(x), live_type_source: 'heuristic' }));
+      // read venue from upcoming live pages (at most 4 page reads)
+      { const up = allPages.filter(x => !x.date || x.date >= today).slice(0, 4); const done = new Map();
+        for (const x of up) done.set(x.slug, await pageVenue(x));
+        allPages = allPages.map(x => done.get(x.slug) || withVenue(x)); }
+      const pages = allPages.filter(x => cityOk(x) && (want === 'festival' ? x.live_type === 'festival' : x.live_type !== 'festival'));
+      const upPages = pages.filter(x => !x.date || x.date >= today);
+      if (p.when === 'upcoming' && !sched.length && !upPages.length && p.city) {
+        const other = allPages.filter(x => x.date && x.date >= today);
+        if (other.length) p._other = other.slice(0, 5); }
+      upFest = allSched.filter(i => i.live_type === 'festival');
+      if (p.when !== 'upcoming' || sched.length || upPages.length) return { live_type: want, schedule: sched, special_pages: (p.when === 'upcoming' ? upPages : pages).slice(0, 10), is_past: false, ...(sched.length || upPages.length ? {} : festHint(upFest)) };
+      past = pages.filter(x => x.date && x.date < today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5).map(x => ({ ...x, is_past: true }));
+    }
+    // Walk back month by month (newest first) over all history until 3 matching past shows are found, the history start
+    // is reached, or the whole-call deadline stops it (then truncated_by_deadline + a next hint with a `before` cursor).
+    const shows = new Map(); const pastFest = [];
+    const w = await walkBack(p.before ? prevMonth(p.before) : today.slice(0, 7), async month => {
+      const its = await liveMonth(month);
+      for (const it of its.filter(i => i.date < today).map(typed).filter(cityOk).sort((a, b) => b.date.localeCompare(a.date))) {
+        if (it.live_type === 'festival') { pastFest.push({ ...it, is_past: true }); if (want !== 'festival') continue; }
+        else if (want === 'festival') continue;
+        const key = `${it.title}|${it.venue || ''}`; const prev = shows.get(key);
+        if (prev) { if (!prev.dates.includes(it.date)) prev.dates.push(it.date); }
+        else if (shows.size < 3) shows.set(key, { ...it, description: undefined, dates: [it.date], is_past: true });
       }
-      pastSched = [...shows.values()].map(x => { const { description, ...rest } = x; return { ...rest, dates: x.dates.sort() }; }); }
-    { pastSched = pastSched.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).map(x => ({ ...x, is_past: true })); }
+      return shows.size >= 3; });
+    const pastSched = [...shows.values()].map(x => { const { description, ...rest } = x; return { ...rest, dates: x.dates.sort(), is_past: true }; })
+      .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
     const hint = festHint([...upFest, ...pastFest]);
-    return { live_type: want, ...hint, other_upcoming_live_without_city_match: p._other ? p._other.filter(x => want === 'festival' ? x.live_type === 'festival' : x.live_type !== 'festival') : null, schedule: pastSched, special_pages: past, none_upcoming: true, is_past: past.length + pastSched.length > 0, note: `No upcoming live${p.city ? ' in ' + p.city : ''} found (schedule next 3 months + LIVE pages, JST).` + (past.length + pastSched.length ? ' Showing latest PAST matches (is_past: true).' : '') };
+    const found = past.length + pastSched.length;
+    const head = p.before ? `Continuation: past live${p.city ? ' in ' + p.city : ''} before ${p.before}.` : `No upcoming live${p.city ? ' in ' + p.city : ''} found (schedule next 3 months + LIVE pages, JST).`;
+    return { live_type: want, ...hint, other_upcoming_live_without_city_match: p._other ? p._other.filter(x => want === 'festival' ? x.live_type === 'festival' : x.live_type !== 'festival') : null,
+      schedule: pastSched, special_pages: past, none_upcoming: p.before ? null : true, continued_before: p.before || null, is_past: found > 0, ...w,
+      note: head + (found ? ' Showing latest PAST matches (is_past: true).' : '') + ' ' + walkNote(w, 'past lives') };
   }
   const run = {
     live,
@@ -284,21 +327,28 @@ module.exports = ({ tools }) => {
       return { items: items.length ? items : l.items.filter(i => /single|シングル/i.test(i.type || '')).slice(0, 20), note: items.length ? null : 'could not match the single number by title; showing singles' }; },
     store: p => call('list_store_products', p.keyword ? { keyword: p.keyword } : {}).then(r => ({ total: r.total, items: r.items.slice(0, 20) })),
     store_stock: stock,
-    special: () => call('list_special_pages', {}).then(r => ({ total: r.total, items: r.items.slice(0, 20) })),
+    special: () => specialPages().then(r => ({ total: r.total, items: r.items.slice(0, 20) })),
     member: p => call('resolve_member', { query: p.member_id || 'all' }),
   };
   const ask = {
     description: 'START HERE. Answers a fan question in Chinese/Japanese/English in one call: parses terms (音番, 見面會/ミーグリ 第N部, ブログ/部落格, N單 C位/站位, 周邊/グッズ 有貨嗎, 行程/下週/下個月, 新聞), member names/nicknames and dates (JST), then calls the right tool(s). Returns interpreted_as + confidence; if ambiguous returns candidates and calls nothing. Not for: exact ids you already have (call the specific tool). e.g. "下週有什麼音番", "16單 C位是誰".',
     inputSchema: { type: 'object', additionalProperties: false, required: ['query'], properties: {
       query: { type: 'string', minLength: 1, description: 'The fan question as written, e.g. "京都見面會第3部幾點", "石森璃花 最新blog", "這週行程".' },
-      date_range: { type: 'object', additionalProperties: false, properties: { from: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, to: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } }, description: 'Optional explicit JST date range overriding dates in the query.' } } },
+      date_range: { type: 'object', additionalProperties: false, properties: { from: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, to: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } }, description: 'Optional explicit JST date range overriding dates in the query.' },
+      before: { type: 'string', pattern: '^\\d{4}-\\d{2}$', description: 'Continue a past-history search: only months BEFORE this YYYY-MM (exclusive). Use the value from a previous result\'s next hint (continue_before) when it was truncated_by_deadline.' } } },
     async run(a) {
       const interp = parse(a.query, { date_range: a.date_range });
       const interpreted_as = { intent: interp.intent, params: interp.params, members: interp.members || null, dates: interp.dates || null, notes: interp.notes.length ? interp.notes : null };
       if (interp.ambiguous) return { interpreted_as, confidence: interp.confidence, ambiguous: true, candidates: interp.candidates, result: null,
         hint: 'Ask the user to clarify, or call ask again with a more specific query / call the specific tool.' };
-      const result = await run[interp.intent](interp.params);
-      return { interpreted_as, confidence: interp.confidence, ambiguous: false, result };
+      if (a.before !== undefined && !/^\d{4}-\d{2}$/.test(a.before)) throw new Error('before must be YYYY-MM');
+      const params = a.before && ['schedule', 'music_tv', 'live'].includes(interp.intent) ? { ...interp.params, before: a.before } : interp.params;
+      if (a.before) interpreted_as.params = params;
+      const result = await run[interp.intent](params);
+      const out = { interpreted_as, confidence: interp.confidence, ambiguous: false, result };
+      if (result && result.continue_before) out.next = [{ tool: 'ask', params: { query: a.query, ...(a.date_range ? { date_range: a.date_range } : {}), before: result.continue_before },
+        why: result.truncated ? `search stopped (${result.stop_reason}); continue with months before ${result.continue_before}` : `older history (before ${result.continue_before})` }];
+      return out;
     } };
   return { ask };
 };

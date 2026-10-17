@@ -41,20 +41,27 @@ module.exports = function makeSpecialTools({ politeFetch, clean, ORIGIN }) {
       let archive = parseList(first, 'archive');
       const maxPage = Math.max(0, ...[...first.matchAll(/archive\/list\?[^"]*?page=(\d+)/g)].map(m => Number(m[1])));
       const seen = new Set(archive.map(x => x.slug));
+      let stopped = null; let pagesRead = 1;
       for (let p = 1; p <= Math.min(maxPage, 30); p++) {
-        const items = parseList(await politeFetch(`${S46}/diary/archive/list?ima=0000&page=${p}&cd=archive`, 'text'), 'archive');
-        for (const it of items) if (!seen.has(it.slug)) { seen.add(it.slug); archive.push(it); }
+        let html;
+        try { html = await politeFetch(`${S46}/diary/archive/list?ima=0000&page=${p}&cd=archive`, 'text'); }
+        catch (e) { if (e && (e.code === 'DEADLINE' || e.code === 'TIMEOUT')) { stopped = { reason: e.code === 'DEADLINE' ? 'deadline' : 'upstream_timeout', message: e.message, next_page: p }; break; } throw e; }
+        pagesRead++;
+        for (const it of parseList(html, 'archive')) if (!seen.has(it.slug)) { seen.add(it.slug); archive.push(it); }
       }
       // de-dupe: live first, then archive entries not already listed (keep the extra fields if missing)
       const by = new Map();
       for (const it of [...live, ...archive]) { const prev = by.get(it.slug); if (!prev) by.set(it.slug, it); else for (const k of ['title', 'date', 'thumbnail']) if (prev[k] == null && it[k] != null) prev[k] = it[k]; }
       const items = [...by.values()];
-      return { total: items.length, live_count: live.length, archive_pages: maxPage + 1, items };
+      return { total: items.length, live_count: live.length, archive_pages: maxPage + 1, archive_pages_read: pagesRead, items,
+        truncated_by_deadline: !!stopped && stopped.reason === 'deadline', truncated: !!stopped,
+        truncated_reason: stopped ? `${stopped.reason}: archive pages ${stopped.next_page}..${Math.min(maxPage, 30)} not read (${stopped.message}); the list is incomplete, call again` : null };
     } };
 
   const get_special_page = {
-    description: 'Read one official special page (/s/s46/page/<slug>) as generic content: title, plain text (headings and line breaks kept, site chrome removed, capped at 20k chars), filtered content images, links and embedded videos. Slug from list_special_pages.',
-    inputSchema: { type: 'object', additionalProperties: false, required: ['slug'], properties: { slug: { type: 'string', pattern: SLUG.source, description: 'Page slug, e.g. "backslive_16th" or "16th_single".' } } },
+    description: 'Read one official special page (/s/s46/page/<slug>) as generic content: title, plain text (headings and line breaks kept, site chrome removed, capped at max_chars, default 20k), filtered content images, links and embedded videos. Slug from list_special_pages.',
+    inputSchema: { type: 'object', additionalProperties: false, required: ['slug'], properties: { slug: { type: 'string', pattern: SLUG.source, description: 'Page slug, e.g. "backslive_16th" or "16th_single".' },
+      max_chars: { type: 'integer', minimum: 500, maximum: 100000, default: TEXT_CAP, description: `Cap for text (default ${TEXT_CAP} chars); truncated:true + text_length when cut.` } } },
     async run(a) {
       const slug = String(a.slug || '');
       if (!SLUG.test(slug)) throw new Error('slug must match /^[A-Za-z0-9_-]+$/');
@@ -89,9 +96,11 @@ module.exports = function makeSpecialTools({ politeFetch, clean, ORIGIN }) {
         .replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|dt|dd|tr|section|ul|dl|table)>/gi, '\n').replace(/<(li)\b[^>]*>/gi, '\n・').replace(/<[^>]+>/g, ''))
         .split('\n').map(l => l.replace(/[ \t\u00a0\u3000]+/g, ' ').trim()).filter((l, i, arr) => l || (arr[i - 1] || '')).join('\n')
         .replace(/^#+\s*$/gm, '').replace(/^・\s*$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
-      const truncated = body.length > TEXT_CAP;
-      if (truncated) body = body.slice(0, TEXT_CAP);
-      return clean({ slug, url, title: title || undefined, text: body, truncated: truncated || undefined, text_length: truncated ? undefined : body.length,
+      const cap = a.max_chars === undefined ? TEXT_CAP : a.max_chars;
+      if (!(Number.isInteger(cap) && cap >= 500 && cap <= 100000)) throw new Error('max_chars must be an integer 500..100000');
+      const fullLen = body.length; const truncated = fullLen > cap;
+      if (truncated) body = body.slice(0, cap);
+      return clean({ slug, url, title: title || undefined, text: body, truncated, text_length: fullLen,
         images: images.length ? images : undefined, links: links.length ? links : undefined, videos: videos.length ? videos : undefined });
     } };
 

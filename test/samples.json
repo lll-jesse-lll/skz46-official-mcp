@@ -2,6 +2,9 @@
   "list_news": {
     "total": 12,
     "offset": 0,
+    "limit": 20,
+    "returned": 12,
+    "include_content": false,
     "items": [
       {
         "kind": "news",
@@ -15,7 +18,7 @@
         "category_label": "リリース",
         "tags": null,
         "thumbnail": null,
-        "content": "<span>16thシングル表題曲『愛MUST BE』のダンスプラクティス動画を</span><span>櫻坂46 OFFICIAL YouTube CHANNELにて公開しました！<br />是非ご覧ください！<br /><br />■櫻坂46『愛MUST BE -Dance Practice-』</span><span><br /><iframe width=\"560\" height=\"315\" src=\"//www.youtube.com/embed/5_ump_XVOds\" frameborder=\"0\" allowfullscreen=\"allowfullscreen\"></iframe><br /></span>"
+        "content_excerpt": "16thシングル表題曲『愛MUST BE』のダンスプラクティス動画を 櫻坂46 OFFICIAL YouTube CHANNELにて公開しました！ 是非ご覧ください！ ■櫻坂46『愛MUST BE -Dance Practice-』"
       },
       {
         "kind": "news",
@@ -29,9 +32,13 @@
         "category_label": "リリース",
         "tags": null,
         "thumbnail": null,
-        "content": "<p>2027年3月17日(水)にLIVE Blu-ray BOX『SAKURAZAKA46 BACKS LIVE!! BOX 2024-2026』の発売が決定しました！<br />数多くの物語が生まれた&rdquo;BACKS LIVE!!\"を堪能できるスペシャルな商品となっております！<br />予約受注のため、お早めにご予約ください！<br /><br /><a href=\"https://sakurazaka46.lnk.to/BACKSLIVEBOX_2024-2026_PKG\">ソニーミュージックショップはコチラ</a></p><p><br />＜SAKURAZAKA46 BACKS LIVE!! BOX 2024-2026＞<br />発売日:2027年3月17日(水)<br />ご予約対象期間：2026年10月14日(水)21:00 ～ 2026年12月17日(木)23:59まで<br /><br />豪華プレゼントBOX仕様<br />7Blu-ray+BACKSフォーメーションアーティストフォト・アクリルスタンド7種+フォトブックレット<br />完全生産限定盤(ソニーミュージックショップ) / SRX7-70～77 / ￥46,000 (tax in)</p>"
+        "content_excerpt": "2027年3月17日(水)にLIVE Blu-ray BOX『SAKURAZAKA46 BACKS LIVE!! BOX 2024-2026』の発売が決定しました！ 数多くの物語が生まれた&rdquo;BACKS LIVE!!\"を堪能できる…"
       }
     ],
+    "has_more": false,
+    "truncated": false,
+    "truncated_reason": null,
+    "items_bytes": 8074,
     "next": null
   },
   "list_blog_posts": {
@@ -313,6 +320,8 @@
     "published_at": "2026-10-15T17:27:00+09:00",
     "url": "https://sakurazaka46.com/s/s46/diary/detail/71404?ima=0000&cd=blog",
     "body_text": "やっほー！\n\n櫻坂46 二期生 宮崎県出身\nまつりちゃんこと松田里奈です。\n\nブログ開いていただきありがとうございます。\n\n10月13日(火)\n\n｢うたコン｣\n\n初披露ありがとうございました！\n\n大好きな生演奏でのパフォーマンス！かっこよかったな〜！\n\nそして｢愛MUST BE｣初披露だけでなく、天ちゃんと\n\nKiroroさんの｢Best Friend｣も披露させていただきました！！\n\nお話をいた…",
+    "body_truncated": false,
+    "body_length": 590,
     "images": [
       "https://sakurazaka46.com/files/14/diary/s46/blog/moblog/202610/mobbBltZM.jpg",
       "https://sakurazaka46.com/files/14/diary/s46/blog/moblog/202610/mobSxBrul.jpg",
@@ -490,6 +499,7 @@
     "total": 82,
     "live_count": 37,
     "archive_pages": 7,
+    "archive_pages_read": 7,
     "items": [
       {
         "slug": "backslive_16th",
@@ -508,6 +518,9 @@
         "thumbnail": "https://sakurazaka46.com/images/14/cf2/fb758c4ab5461446a05636ba4f083.jpg"
       }
     ],
+    "truncated_by_deadline": false,
+    "truncated": false,
+    "truncated_reason": null,
     "next": [
       {
         "tool": "get_special_page",
@@ -537,7 +550,7 @@
     "url": "https://sakurazaka46.com/s/s46/page/16th_single?ima=0000",
     "title": "櫻坂46 16th Single「愛MUST BE」",
     "text": "# 16th Single 愛 MUST BE 2026.10.14 Wed OUT\n\nシリアルナンバー応募抽選ページはこちら\n\n## Music Video\n\n愛MUST BE\n\n自称バレエダンサー\n\n元凶\n\n## Teaser\n\nメンバーがこの秋挑戦したい「○○の秋」を当てるクイズを出題！\n\n「食欲」「スポーツ」「読書」「芸術」「紅葉」の中から、\n答えを予想してみてください！\n\n正解すると、メンバーの〇〇の秋写真をチェックできます。\n\nぜひチャレンジしてみてください！\n\n挑戦する\n\n## Release\n\n### 初回仕様限定盤 TYPE-A(CD+BD)\n\nSRCL-13890～13891\n\n・応募特典シリアルナンバー封入\n\n・メンバー生写真（各TYPE別より1枚ランダム封入）\n\n￥2,000（tax in）\n\nVIEW DETAIL\n\n### 初回仕様限定盤 TYPE-B(CD+B",
-    "truncated": null,
+    "truncated": false,
     "text_length": 2767,
     "images": [
       "https://sakurazaka46.com/images/14/74a/cb228ec45c0ef05aec272c60268c6.jpg",
@@ -728,7 +741,7 @@
         "params": {
           "product_id": "114889"
         },
-        "why": "at-least-N stock (guest cart probe)"
+        "why": "in-stock check (guest cart probe, quantity 1; probe_quantity up to 50 for at-least-N)"
       }
     ]
   },
@@ -737,26 +750,29 @@
     "name": "【通常配送】6th Anniversary ロゴTシャツ/ホワイト",
     "classcategory_id1": "2802",
     "classcategory_id2": null,
-    "requested_quantity": 50,
+    "requested_quantity": 1,
     "probe": "guest_cart",
     "available": true,
-    "at_least": 28,
-    "exact": 28,
-    "exact_basis": "cart reduced the requested 50 to 28 (below the order cap)",
+    "at_least": 1,
+    "exact": null,
+    "exact_basis": null,
     "capped_by_order_limit": false,
     "order_limit": null,
     "variation_listed_on_page": true,
-    "message_raw": "※「【通常配送】6th Anniversary ロゴTシャツ/ホワイト」はお一人様28点までです。",
+    "message_raw": null,
     "cart_line": {
       "name": "【通常配送】6th Anniversary ロゴTシャツ/ホワイト",
       "variation": "サイズ：S",
-      "quantity": 28,
+      "quantity": 1,
       "form": "form183",
       "cart_no": "1"
     },
-    "cart_emptied": true,
     "cart_touched": true,
+    "cart_cleanup": "ok",
+    "cart_emptied": true,
+    "cleanup_attempts": 1,
     "cleanup_error": null,
+    "cleanup_note": null,
     "reservation_note": "Adding to cart does not reserve stock on this store (product pages: 「ご注文確定するまでは、カートに商品が入っていても在庫は確保されていません」); the probe cart is emptied right away.",
     "next": null
   }

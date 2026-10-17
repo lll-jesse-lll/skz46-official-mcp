@@ -1,6 +1,7 @@
 'use strict';
 // Official goods store: store.plusmember.jp/sakurazaka46 (EC-CUBE 2). HTML only; no JSON API exists.
-// Read-only: GET pages, plus the list page's own POST paging form (pageno). Never touches the cart.
+// Browsing tools are read-only: GET pages, plus the list page's own POST paging form (pageno). Only check_store_stock
+// touches a (throwaway guest) cart, and it never checks out.
 const { extractImages, cleanImageUrl } = require('./images.js');
 const STORE = 'https://store.plusmember.jp/sakurazaka46';
 const PER_PAGE = 50; // the store's default page size
@@ -140,10 +141,12 @@ module.exports = function makeStoreTools({ politeFetch, clean }) {
     } };
 
   // ---------- check_store_stock (guest-cart probe; enabled by default, opt-out SKZ46_DISABLE_CART_PROBE=1) ----------
-  // Adds the per-order cap (50) to a fresh, isolated guest cart, reads what the cart accepted, then ALWAYS deletes every
-  // line and verifies the cart is empty. Never proceeds to checkout, never logs in, never sends personal data.
-  const ORDER_CAP = 50;
-  const cartText = h => text(String(h).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ''));
+  // Adds probe_quantity (default 1 = "in stock yes/no"; up to the per-order cap 50 by explicit opt-in) of one product/variation
+  // to a fresh, isolated guest cart, reads what the cart accepted, then ALWAYS deletes every line and verifies the cart is
+  // empty (up to 3 delete rounds + a final check). The cleanup outcome is reported (cart_cleanup 'ok' | 'failed'), never assumed.
+  // Cleanup requests ignore the call deadline (still 1 s spacing + per-request timeout). Never checks out, never logs in,
+  // never sends personal data.
+  const ORDER_CAP = 50, CLEANUP_ROUNDS = 3;
   function parseCart(html) {
     const lines = [...html.matchAll(/<p class="product-name">([\s\S]*?)<\/p>([\s\S]*?)<li class="product-num">\s*(\d+)\s*<\/li>[\s\S]*?fnFormModeSubmit\('([^']+)', 'delete', 'cart_no', '(\d+)'\)/g)]
       .map(m => ({ name: text(m[1]), variation: text(m[2].split('<p class="product-price">')[0]) || null, quantity: Number(m[3]), form: m[4], cart_no: m[5] }));
@@ -153,17 +156,20 @@ module.exports = function makeStoreTools({ politeFetch, clean }) {
     return { lines, messages, cartKey, empty };
   }
   const check_store_stock = {
-    description: 'Probe goods-store stock with a temporary guest cart: adds the per-order cap (50) of one product/variation to a fresh isolated guest cart on the LIVE store, reads what was accepted, then always empties the cart and verifies it. Answers "is it available, and is at least N in stock". Exact counts only if the store reduces the quantity below the cap. Never checks out. Disabled when SKZ46_DISABLE_CART_PROBE=1.',
+    description: 'Probe goods-store stock with a temporary guest cart on the LIVE store: adds probe_quantity (default 1 = in stock yes/no; 2-50 only when you need "at least N") of one product/variation to a fresh isolated guest cart, reads what was accepted, then always deletes it and verifies; cart_cleanup reports ok/failed. Never checks out. Disabled when SKZ46_DISABLE_CART_PROBE=1.',
     inputSchema: { type: 'object', additionalProperties: false, required: ['product_id'], properties: {
       product_id: { type: 'string', pattern: '^\\d+$', description: 'Store product id.' },
       classcategory_id1: { type: 'string', pattern: '^\\d+$', description: 'Variation id (from get_store_product variations[].classcategory_id1). Required when the product has variations.' },
-      classcategory_id2: { type: 'string', pattern: '^\\d+$', description: 'Second-level variation id when the product has one.' } } },
+      classcategory_id2: { type: 'string', pattern: '^\\d+$', description: 'Second-level variation id when the product has one.' },
+      probe_quantity: { type: 'integer', minimum: 1, maximum: ORDER_CAP, default: 1, description: 'Quantity to add (default 1: only "is it in stock"). Larger values (max 50, the per-order cap) are an explicit opt-in to check "at least N"; the store may reduce it if stock is lower.' } } },
     async run(a) {
       if (process.env.SKZ46_DISABLE_CART_PROBE === '1') throw new Error('check_store_stock is disabled on this server (SKZ46_DISABLE_CART_PROBE=1). It works by adding items to a temporary guest cart on the live store; unset the variable to allow it.');
       const id = String(a.product_id || ''); if (!/^\d+$/.test(id)) throw new Error('product_id must be digits');
+      const want = a.probe_quantity === undefined ? 1 : a.probe_quantity;
+      if (!(Number.isInteger(want) && want >= 1 && want <= ORDER_CAP)) throw new Error(`probe_quantity must be an integer 1..${ORDER_CAP}`);
       const jar = new Map(); // isolated per call
-      const get = u => politeFetch(u, 'response', { jar });
-      const post = (u, form) => politeFetch(u, 'response', { jar, form });
+      const get = (u, o = {}) => politeFetch(u, 'response', { jar, ...o });
+      const post = (u, form, o = {}) => politeFetch(u, 'response', { jar, form, ...o });
       const detailUrl = `${STORE}/products/detail.php?product_id=${id}`;
       const d = await get(detailUrl);
       if (d.status !== 200 || !/__items__item_code/.test(d.text)) throw new Error(`product ${id} not found (HTTP ${d.status})`);
@@ -172,15 +178,16 @@ module.exports = function makeStoreTools({ politeFetch, clean }) {
       const opts1 = sel1 ? [...sel1[0].matchAll(/<option label="([^"]*)" value="(\d+)"/g)].map(m => ({ label: decode(m[1]), value: m[2] })) : [];
       const hasCart = /fnCheckSubmit\(\)[^>]*>\s*カートに入れる/.test(d.text);
       const soldLabel = /<li class="ico--sold-out/.test(d.text.slice(d.text.indexOf('id="detailrightblock"')));
-      const base = { product_id: id, name, classcategory_id1: a.classcategory_id1 || null, classcategory_id2: a.classcategory_id2 || null, requested_quantity: ORDER_CAP, probe: 'guest_cart' };
+      const base = { product_id: id, name, classcategory_id1: a.classcategory_id1 || null, classcategory_id2: a.classcategory_id2 || null, requested_quantity: want, probe: 'guest_cart' };
       if (soldLabel || !hasCart) return clean({ ...base, available: false, at_least: 0, exact: soldLabel ? 0 : null, capped_by_order_limit: false,
-        message_raw: soldLabel ? 'SOLD OUT label on the product page; no add-to-cart button (cart not touched)' : 'no add-to-cart button (cart not touched)', cart_emptied: true, cart_touched: false });
+        message_raw: soldLabel ? 'SOLD OUT label on the product page; no add-to-cart button (cart not touched)' : 'no add-to-cart button (cart not touched)',
+        cart_touched: false, cart_cleanup: 'not_needed', cart_emptied: true, cleanup_attempts: 0, cleanup_error: null });
       if (sel1 && !a.classcategory_id1) throw new Error(`product ${id} has variations; pass classcategory_id1: ${opts1.map(o => `${o.label}=${o.value}`).join(', ')}`);
       if (/<select name="classcategory_id2"/.test(d.text) && !a.classcategory_id2) throw new Error(`product ${id} has a second variation level; pass classcategory_id2 (see get_store_product variations)`);
       const listed = !a.classcategory_id1 || opts1.some(o => o.value === String(a.classcategory_id1));
-      let result, cart_emptied = false, cleanupError = null, token = null, cartKey = null;
+      let result = null, probeError = null, token = null, cartKey = null;
       try {
-        const add = await post(`${detailUrl}&sales_id=`, { mode: 'cart', product_id: id, favorite_product_id: '', hdnBuyGrp: '1', quantity: String(ORDER_CAP),
+        const add = await post(`${detailUrl}&sales_id=`, { mode: 'cart', product_id: id, favorite_product_id: '', hdnBuyGrp: '1', quantity: String(want),
           ...(a.classcategory_id1 ? { classcategory_id1: String(a.classcategory_id1) } : {}), ...(a.classcategory_id2 ? { classcategory_id2: String(a.classcategory_id2) } : {}) });
         token = (/transactionid=([0-9a-f]+)/.exec(add.location || '') || [])[1] || null;
         const addMsg = add.status === 200 ? [...add.text.matchAll(/<p class="attention">([\s\S]*?)<\/p>|<span class="attention">([\s\S]*?)<\/span>/g)].map(m => text(m[1] || m[2])).filter(Boolean) : [];
@@ -192,25 +199,31 @@ module.exports = function makeStoreTools({ politeFetch, clean }) {
         const soldMsg = msgs.some(m => /売り切れ/.test(m));
         const capMsg = msgs.find(m => /一度に購入できる数量は(\d+)まで|一度に数量(\d+)以上の購入はできません/.test(m));
         const capN = capMsg ? Number((/(\d+)/.exec(capMsg.replace(/[^0-9]+/g, ' ').trim()) || [])[1]) : null;
+        const reduced = qty > 0 && qty < want; // the cart cut the request: stock (or a lower sale limit) is below `want`
         result = { available: qty > 0, at_least: qty, // the cart accepted this many, so at least this many are in stock
-          // exact only when the cart cut the quantity below the order cap (store limited it by stock), or the store said it is sold out
-          exact: soldMsg && qty === 0 ? 0 : qty > 0 && qty < ORDER_CAP ? qty : null,
-          exact_basis: soldMsg && qty === 0 ? 'store message: sold out' : qty > 0 && qty < ORDER_CAP ? `cart reduced the requested ${ORDER_CAP} to ${qty} (below the order cap)` : null,
-          capped_by_order_limit: qty === ORDER_CAP || (capN !== null && capN >= ORDER_CAP && qty === capN),
+          exact: soldMsg && qty === 0 ? 0 : reduced && !(capN !== null && qty === capN) ? qty : null,
+          exact_basis: soldMsg && qty === 0 ? 'store message: sold out' : reduced && !(capN !== null && qty === capN) ? `cart reduced the requested ${want} to ${qty}` : null,
+          capped_by_order_limit: (want === ORDER_CAP && qty === ORDER_CAP) || (capN !== null && qty === capN && qty < want),
           order_limit: capN, variation_listed_on_page: listed, message_raw: msgs.join(' / ') || null, cart_line: line || null };
-      } finally {
-        // ALWAYS empty the guest cart, then verify
-        try {
-          for (let round = 0; round < 3; round++) {
-            const c = await get(`${STORE}/cart/index.php`); const cart = parseCart(c.text);
-            if (cart.empty || !cart.lines.length) { cart_emptied = cart.empty || !cart.lines.length; break; }
-            cartKey = cart.cartKey || cartKey;
-            for (const l of [...cart.lines].sort((x, y) => Number(y.cart_no) - Number(x.cart_no)))
-              await post(`${STORE}/cart/index.php`, { transactionid: token || '', mode: 'delete', cart_no: l.cart_no, cartKey: cartKey || '' });
-          }
-        } catch (e) { cleanupError = e.message; }
-      }
-      return clean({ ...base, ...result, cart_emptied, cart_touched: true, cleanup_error: cleanupError,
+      } catch (e) { probeError = e; }
+      // ALWAYS empty the guest cart, then verify (deadline does not apply to cleanup)
+      const cl = { ignoreDeadline: true };
+      let cart_cleanup = 'failed', attempts = 0, cleanupError = null;
+      try {
+        for (;;) {
+          const c = await get(`${STORE}/cart/index.php`, cl); const cart = parseCart(c.text);
+          if (cart.empty) { cart_cleanup = 'ok'; break; }
+          if (!cart.lines.length) { cleanupError = 'cart page has no empty-cart marker and no parsable lines (cannot confirm empty)'; break; }
+          if (attempts >= CLEANUP_ROUNDS) { cleanupError = `${cart.lines.length} line(s) still in the guest cart after ${attempts} delete round(s)`; break; }
+          attempts++; cartKey = cart.cartKey || cartKey;
+          for (const l of [...cart.lines].sort((x, y) => Number(y.cart_no) - Number(x.cart_no)))
+            await post(`${STORE}/cart/index.php`, { transactionid: token || '', mode: 'delete', cart_no: l.cart_no, cartKey: cartKey || '' }, cl);
+        }
+      } catch (e) { cleanupError = e.message; }
+      const cleanupFields = { cart_touched: true, cart_cleanup, cart_emptied: cart_cleanup === 'ok', cleanup_attempts: attempts, cleanup_error: cleanupError,
+        cleanup_note: cart_cleanup === 'ok' ? null : 'The guest cart could not be confirmed empty. It belongs to a throwaway guest session (cookies discarded) and reserves no stock; it expires on the store side.' };
+      if (probeError) { const e = new Error(`stock probe failed: ${probeError.message}; cart_cleanup=${cart_cleanup}${cleanupError ? ' (' + cleanupError + ')' : ''}`); e.code = probeError.code; throw e; }
+      return clean({ ...base, ...result, ...cleanupFields,
         reservation_note: 'Adding to cart does not reserve stock on this store (product pages: 「ご注文確定するまでは、カートに商品が入っていても在庫は確保されていません」); the probe cart is emptied right away.' });
     } };
 

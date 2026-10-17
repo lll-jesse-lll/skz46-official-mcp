@@ -13,7 +13,7 @@ srv.stdout.on('data', c => { buf += c; let i; while ((i = buf.indexOf('\n')) >= 
 const rpc = (method, params) => new Promise(r => { const id = ++nid; pend.set(id, r); srv.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n'); });
 const call = async (name, args) => { const m = await rpc('tools/call', { name, arguments: args }); assert.equal(m.result.isError, false, JSON.stringify(m.result.content)); return m.result.structuredContent; };
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+09:00$/, URLRE = /^https:\/\//;
-const samples = {}; const results = []; const ok = n => { results.push('PASS ' + n); console.log('PASS', n); };
+const samples = {}; const timings = {}; const results = []; const ok = n => { results.push('PASS ' + n); console.log('PASS', n); };
 const trim = o => ({ ...o, items: o.items.slice(0, 2) });
 try {
   const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'smoke', version: '0' } });
@@ -24,12 +24,12 @@ try {
   assert.deepEqual(tl.result.tools.map(t => t.name).sort(), ['get_blog_post', 'get_discography', 'get_formation', 'get_schedule', 'list_blog_posts', 'list_discography', 'list_greeting_cards', 'list_meet_greet_events', 'list_news'].concat('get_meet_greet_event', 'list_special_pages', 'get_special_page', 'list_store_categories', 'list_store_products', 'get_store_product', 'resolve_member', 'check_store_stock', 'ask').sort()); assert.equal(tl.result.tools[0].name, 'ask'); assert.ok(tl.result.tools.every(t => /Use for:|START HERE/.test(t.description) && t.description.length < 420)); ok('tools/list (18 tools, ask first, short Use for/Not for descriptions)');
 
   const n = await call('list_news', { dy: '202610', category: 'release' });
-  assert.ok(n.total > 0 && n.items.length === Math.min(n.total, 200));
-  for (const it of n.items) { assert.equal(it.kind, 'news'); assert.equal(it.category, 'release'); assert.match(it.published_at, ISO); assert.match(it.url, URLRE); assert.ok(it.id && it.title); assert.ok('content' in it && 'tags' in it && 'caption' in it && 'thumbnail' in it); assert.match(it.pubdate, /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/); assert.equal(it.category_label, 'リリース'); if (it.thumbnail) assert.match(it.thumbnail, URLRE); assert.ok(it.published_at.startsWith('2026-10')); }
-  samples.list_news = trim(n); ok(`list_news dy=202610 category=release (total ${n.total})`);
+  assert.ok(n.total > 0 && n.items.length === Math.min(n.total, 20) && n.limit === 20 && n.include_content === false);
+  for (const it of n.items) { assert.equal(it.kind, 'news'); assert.equal(it.category, 'release'); assert.match(it.published_at, ISO); assert.match(it.url, URLRE); assert.ok(it.id && it.title); assert.ok(!('content' in it) && 'content_excerpt' in it && 'tags' in it && 'caption' in it && 'thumbnail' in it); assert.match(it.pubdate, /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/); assert.equal(it.category_label, 'リリース'); if (it.thumbnail) assert.match(it.thumbnail, URLRE); assert.ok(it.published_at.startsWith('2026-10')); }
+  samples.list_news = trim(n); ok(`list_news dy=202610 category=release: default short items (total ${n.total}, returned ${n.items.length}, no content)`);
   const nc = await call('list_news', { dy: '20261015', include_content: false });
   assert.ok(nc.items.every(i => !('content' in i) && i.published_at.startsWith('2026-10-15'))); ok(`list_news dy=20261015 include_content=false (total ${nc.total})`);
-  const nt = await call('list_news', { dy: '202610' }); const tagged = nt.items.filter(i => Array.isArray(i.tags));
+  const nt = await call('list_news', { dy: '202610', include_content: true, limit: 200 }); assert.equal(nt.items.length, nt.total); assert.equal(nt.truncated, false); const tagged = nt.items.filter(i => Array.isArray(i.tags));
   assert.ok(tagged.length > 0 && tagged.every(i => i.tags.every(t => /^\d+$/.test(t)))); assert.ok(nt.items.some(i => i.tags === null), 'untagged items carry tags:null');
   assert.ok(nt.items.every(i => typeof i.content === 'string')); ok(`list_news hub fields: tags on ${tagged.length}/${nt.items.length}, caption/category_label/content/pubdate present`);
 
@@ -190,9 +190,12 @@ try {
   else {
     const v = gp.variations[0];
     const cs = await call('check_store_stock', { product_id: '114889', classcategory_id1: v.classcategory_id1 });
-    assert.equal(cs.cart_touched, true); assert.equal(cs.cart_emptied, true, 'probe cart must be emptied'); assert.equal(cs.cleanup_error, null);
-    assert.equal(typeof cs.available, 'boolean'); if (cs.available) { assert.ok(cs.at_least >= 1 && cs.at_least <= 50); if (cs.at_least === 50) { assert.equal(cs.capped_by_order_limit, true); assert.equal(cs.exact, null); } else assert.equal(cs.exact, cs.at_least); }
-    samples.check_store_stock = cs; ok(`check_store_stock 114889 ${v.label}: available=${cs.available}, at_least=${cs.at_least}, exact=${cs.exact}, cart_emptied=${cs.cart_emptied}`);
+    assert.equal(cs.cart_touched, true); assert.equal(cs.cart_cleanup, 'ok', 'probe cart must be emptied'); assert.equal(cs.cart_emptied, true); assert.equal(cs.cleanup_error, null);
+    assert.equal(cs.requested_quantity, 1); assert.equal(typeof cs.available, 'boolean'); if (cs.available) { assert.equal(cs.at_least, 1); assert.equal(cs.capped_by_order_limit, false); }
+    samples.check_store_stock = cs; ok(`check_store_stock 114889 ${v.label} default probe_quantity 1: available=${cs.available}, at_least=${cs.at_least}, cart_cleanup=${cs.cart_cleanup} (${cs.cleanup_attempts} round)`);
+    const cs50 = await call('check_store_stock', { product_id: '114889', classcategory_id1: v.classcategory_id1, probe_quantity: 50 });
+    assert.equal(cs50.requested_quantity, 50); assert.equal(cs50.cart_cleanup, 'ok'); if (cs50.available) { assert.ok(cs50.at_least >= 1 && cs50.at_least <= 50); if (cs50.at_least === 50) { assert.equal(cs50.capped_by_order_limit, true); assert.equal(cs50.exact, null); } }
+    ok(`check_store_stock probe_quantity 50 (opt-in): at_least=${cs50.at_least}, capped=${cs50.capped_by_order_limit}, cart_cleanup=${cs50.cart_cleanup}`);
     if (soP) { const cso = await call('check_store_stock', { product_id: soP.product_id }); assert.equal(cso.available, false); assert.equal(cso.cart_touched, false); ok(`check_store_stock sold-out ${soP.product_id}: available=false without touching the cart`); }
     const needVar = await rpc('tools/call', { name: 'check_store_stock', arguments: { product_id: '114889' } }); assert.equal(needVar.result.isError, true); assert.match(needVar.result.content[0].text, /classcategory_id1/); ok('check_store_stock without required variation -> isError listing variations');
   }
@@ -235,21 +238,33 @@ try {
     assert.deepEqual(b.result.matches.map(m => m.code), ['71292']); assert.ok(b.result.matches.every(m => m.sessions.every(x => x.date >= '2026-10-16')));
     const bp = await call('ask', { query: '上次京都見面會第3部幾點' }); assert.ok(bp.result.matches.some(m => m.sessions.some(x => x.date < '2026-10-16')));
     const bn = await call('ask', { query: '名古屋見面會第9部幾點' }); assert.equal(bn.result.none_upcoming, true); assert.deepEqual(bn.result.matches, []); assert.ok(!bn.result.latest_past_event || bn.result.next_hint.tool === 'get_meet_greet_event');
-    const lv = await call('ask', { query: '大阪演唱會' }); assert.equal(lv.interpreted_as.intent, 'live');
+    const tlv = Date.now(); const lv = await call('ask', { query: '大阪演唱會' }); const lvMs = Date.now() - tlv; assert.equal(lv.interpreted_as.intent, 'live'); assert.ok(lvMs < 48000, `大阪演唱會 took ${lvMs} ms`); timings.osaka = lvMs;
     assert.equal(lv.result.live_type, 'solo'); assert.ok([...lv.result.schedule, ...lv.result.special_pages].every(x => x.live_type !== 'festival' && !/GIGANTIC/i.test(x.title)));
     { const y = await call('ask', { query: '横浜 演唱會' }); assert.ok(y.result.special_pages.some(x => x.slug === 'backslive_16th' && x.venue === 'ぴあアリーナMM' && x.city === '横浜'));
       const z = await call('ask', { query: 'ZOZOマリン ライブ' }); assert.ok(z.result.special_pages.some(x => x.venue === 'ZOZOマリンスタジアム')); }
     if (lv.result.festival_hint) assert.ok(lv.result.festival_hint.items.every(x => x.live_type === 'festival'));
-    if (lv.result.none_upcoming) { const k = lv.result.schedule.find(x => x.venue === '京セラドーム大阪'); assert.ok(k && k.is_past === true && k.dates.includes('2025-08-24') && /Addiction/.test(k.title), 'Osaka past fallback must include 2025 京セラドーム tour final'); }
+    if (lv.result.none_upcoming) { assert.ok(lv.result.searched_range && 'truncated_by_deadline' in lv.result);
+      // follow the continuation cursor (each call is capped by the 45 s deadline) until the 2025 Osaka show is reached
+      let cur = lv, k = cur.result.schedule.find(x => x.venue === '京セラドーム大阪'); timings.osaka_calls = [lvMs];
+      for (let i = 0; !k && cur.next && cur.next[0].tool === 'ask' && i < 3; i++) { const t1 = Date.now(); cur = await call('ask', cur.next[0].params); const ms = Date.now() - t1; timings.osaka_calls.push(ms); assert.ok(ms < 48000, `continuation took ${ms} ms`);
+        assert.ok(cur.result.searched_range); k = cur.result.schedule.find(x => x.venue === '京セラドーム大阪'); } assert.ok(k && k.is_past === true && k.dates.includes('2025-08-24') && /Addiction/.test(k.title), 'Osaka past fallback must include 2025 京セラドーム tour final'); }
     if (lv.result.none_upcoming) assert.ok([...lv.result.schedule, ...lv.result.special_pages].every(x => x.is_past === true)); else assert.ok(lv.result.is_past === false);
+    { const t0 = Date.now(); const nm = await call('ask', { query: '広島演唱會' }); const ms = Date.now() - t0; timings.no_match = ms; const r = nm.result;
+      assert.ok(ms < 48000, `no-match query took ${ms} ms`); assert.ok(r.searched_range, 'searched_range missing');
+      if (!r.history_complete) { assert.ok(r.continue_before && nm.next && nm.next[0].params.before === r.continue_before); }
+      if (r.truncated) assert.match(r.note, /NOT searched/);
+      ok(`real no-match-ish query 広島演唱會: ${ms} ms, found ${r.schedule.length + r.special_pages.length}, searched ${r.searched_range.from}..${r.searched_range.to}, truncated_by_deadline=${r.truncated_by_deadline}, history_complete=${r.history_complete}`);
+      if (nm.next) { const t1 = Date.now(); const c2 = await call('ask', nm.next[0].params); const ms2 = Date.now() - t1; timings.no_match_continue = ms2; assert.ok(ms2 < 48000); assert.equal(c2.result.continued_before, r.continue_before);
+        ok(`continuation before=${r.continue_before}: ${ms2} ms, searched ${c2.result.searched_range && c2.result.searched_range.from}..${c2.result.searched_range && c2.result.searched_range.to}, history_complete=${c2.result.history_complete}`); } }
     const c = await call('ask', { query: '石森璃花 最新blog' }); assert.ok(c.result.items.length && c.result.items.every(i => i.member_id === '59')); assert.equal(c.next[0].tool, 'get_blog_post');
     const d = await call('ask', { query: '下週有什麼音番' }); assert.equal(d.interpreted_as.params.genre, 'music_tv'); assert.ok(Array.isArray(d.result.items));
     const e = await call('ask', { query: '遠藤 blog' }); assert.equal(e.ambiguous, true); assert.equal(e.result, null); assert.equal(e.candidates.length, 2);
     const f = await call('list_meet_greet_events', {}); assert.equal(f.next[0].tool, 'get_meet_greet_event');
     ok(`ask live: upcoming default (Kyoto 第3部 -> only 71292), 上次 -> past allowed, no upcoming -> none_upcoming + past hint; venue->city (横浜→ぴあアリーナMM BACKS LIVE, ZOZOマリン→6th anniv); 大阪演唱會 -> past fallback 2025-08-23/24 京セラドーム大阪 5th TOUR; upcoming-first, past labeled is_past; 16單C位 -> 谷口愛季 high; 京都第3部 -> ${s3.date} ${s3.start_time}-${s3.end_time}; blog member 59 + next hint; 音番 next week; 遠藤 ambiguous -> candidates`); }
-  { const { execFileSync } = await import('node:child_process'); execFileSync('node', [new URL('./eval.mjs', import.meta.url).pathname]); ok('offline eval: all eval-queries pass'); }
+  { const { execFileSync } = await import('node:child_process'); execFileSync('node', [new URL('./eval.mjs', import.meta.url).pathname]); ok('offline eval: all eval-queries pass');
+    const o = execFileSync('node', [new URL('./offline.mjs', import.meta.url).pathname], { encoding: 'utf8' }); const n = (/(\d+) offline checks passed/.exec(o) || [])[1]; assert.ok(n, o); ok(`offline mock suite: ${n} checks (deadline, timeout, news size, probe quantity/cleanup, EOF drain)`); }
   const unk = await rpc('tools/call', { name: 'nope', arguments: {} }); assert.ok(unk.error); ok('unknown tool -> JSON-RPC error');
   fs.writeFileSync(path.join(root, 'test', 'samples.json'), JSON.stringify(samples, null, 2));
-  console.log(`\n${results.length} checks passed`);
+  console.log('timings ms:', JSON.stringify(timings)); console.log(`\n${results.length} checks passed`);
 } catch (err) { console.error('FAIL', err.message); process.exitCode = 1; }
 finally { srv.stdin.end(); }

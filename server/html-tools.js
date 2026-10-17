@@ -6,6 +6,11 @@ const { extractImages, cleanImageUrl } = require('./images.js');
 const { memberIdFrom } = require('./members.js');
 module.exports = function makeHtmlTools({ politeFetch, abs, jstIso, clean, ORIGIN }) {
   const S46 = ORIGIN + '/s/s46';
+  const BODY_CAP = 20000;
+  const maxCharsProp = { type: 'integer', minimum: 500, maximum: 100000, default: BODY_CAP, description: `Cap for body_text (default ${BODY_CAP} chars); body_truncated:true + body_length when cut.` };
+  const capBody = (t, a) => { const cap = a.max_chars === undefined ? BODY_CAP : a.max_chars;
+    if (!(Number.isInteger(cap) && cap >= 500 && cap <= 100000)) throw new Error('max_chars must be an integer 500..100000');
+    const s = String(t || ''); return { body_text: s.length > cap ? s.slice(0, cap) : s, body_truncated: s.length > cap, body_length: s.length }; };
 
   // ---------- helpers ----------
   const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" };
@@ -81,7 +86,7 @@ module.exports = function makeHtmlTools({ politeFetch, abs, jstIso, clean, ORIGI
   // ---------- get_meet_greet_event ----------
   const get_meet_greet_event = {
     description: 'Details of one MEET&GREET event page (code from list_meet_greet_events): venues/dates, per-part (第N部) session times incl. reception times, member lanes, full text.',
-    inputSchema: { type: 'object', additionalProperties: false, required: ['code'], properties: { code: { type: 'string', pattern: '^\\d+$', description: 'Event code, e.g. "71292".' } } },
+    inputSchema: { type: 'object', additionalProperties: false, required: ['code'], properties: { code: { type: 'string', pattern: '^\\d+$', description: 'Event code, e.g. "71292".' }, max_chars: maxCharsProp } },
     async run(a) {
       if (!/^\d+$/.test(String(a.code || ''))) throw new Error('code must be digits');
       const url = `${S46}/diary/detail/${a.code}?ima=0000&cd=event_page`;
@@ -108,7 +113,7 @@ module.exports = function makeHtmlTools({ politeFetch, abs, jstIso, clean, ORIGI
       }
       members = nonEmpty([...new Set(names)]);
       return clean({ code: String(a.code), title, url, category: text(first(/<div class="com-eventico">[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/, html) || ''),
-        listed_date: dotDate(listed), images: nonEmpty(extractImages(bodyHtml)), sessions: nonEmpty(parseSessions(body_text)), members, body_text });
+        listed_date: dotDate(listed), images: nonEmpty(extractImages(bodyHtml)), sessions: nonEmpty(parseSessions(body_text)), members, ...capBody(body_text, a) });
     } };
 
   // Heuristic, deliberately conservative music-program title list (音番): core music shows only. A title match, not an
@@ -277,7 +282,7 @@ module.exports = function makeHtmlTools({ politeFetch, abs, jstIso, clean, ORIGI
   // ---------- get_blog_post ----------
   const get_blog_post = {
     description: 'Full text of one member blog post (plain text with line breaks) plus image URLs. Use after list_blog_posts to read a post.',
-    inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string', pattern: '^\\d+$', description: 'Blog post id, e.g. "71404".' } } },
+    inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string', pattern: '^\\d+$', description: 'Blog post id, e.g. "71404".' }, max_chars: maxCharsProp } },
     async run(a) {
       if (!/^\d+$/.test(String(a.id || ''))) throw new Error('id must be digits');
       const url = `${S46}/diary/detail/${a.id}?ima=0000&cd=blog`;
@@ -294,7 +299,7 @@ module.exports = function makeHtmlTools({ politeFetch, abs, jstIso, clean, ORIGI
         member_id: first(/class="btn-type3 pos-center"><a href="[^"]*[?&]ct=(\d+)/, foot),
         member_name: text(first(/<p class="name">([\s\S]*?)<\/p>/, foot) || ''),
         published_at: jstIso(text(first(/<p class="date[^"]*">([\s\S]*?)<\/p>/, foot) || '')),
-        url, body_text: textWithBreaks(body.replace(/<\/div>\s*$/, '')),
+        url, ...capBody(textWithBreaks(body.replace(/<\/div>\s*$/, '')), a),
         images: nonEmpty(extractImages(body)) });
     } };
 

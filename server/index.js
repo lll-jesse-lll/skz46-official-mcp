@@ -4,30 +4,57 @@
 const ORIGIN = 'https://sakurazaka46.com';
 const API = ORIGIN + '/s/s46/api/';
 const MIN_GAP_MS = 1000;
-const VERSION = '0.4.1';
+const VERSION = '0.4.2';
 const CATEGORIES = ['release', 'goods', 'event', 'media', 'ticket', 'audition'];
+const envInt = (k, d, min) => { const v = Number(process.env[k]); return Number.isFinite(v) && v >= min ? Math.floor(v) : d; };
+// Whole tools/call deadline (all upstream requests of one call, including queue wait) and per-request timeout.
+const DEADLINE_MS = envInt('SKZ46_DEADLINE_MS', 45000, 1000);
+const FETCH_TIMEOUT_MS = envInt('SKZ46_FETCH_TIMEOUT_MS', 15000, 500);
+const MAX_RESPONSE_BYTES = envInt('SKZ46_MAX_RESPONSE_BYTES', 600000, 10000); // default byte cap for list_news
 
 // ---------- upstream ----------
 const { AsyncLocalStorage } = require('node:async_hooks');
 const crypto = require('node:crypto');
 const rawStore = new AsyncLocalStorage(); // set per tools/call when arguments.raw === true
+const callCtx = new AsyncLocalStorage(); // { deadline } per tools/call
+class DeadlineError extends Error { constructor(msg) { super(msg); this.name = 'DeadlineError'; this.code = 'DEADLINE'; } }
+class UpstreamTimeoutError extends Error { constructor(msg) { super(msg); this.name = 'UpstreamTimeoutError'; this.code = 'TIMEOUT'; } }
+const remainingMs = () => { const c = callCtx.getStore(); return c ? c.deadline - Date.now() : Infinity; };
 let chain = Promise.resolve(); let last = 0;
-// Serialized, >=1s spaced request (all hosts share one queue). as: 'json' (default) | 'text' | 'jsonp'.
-// opts.form: object -> POST application/x-www-form-urlencoded (used only for EC-CUBE list paging; read-only).
+// Serialized, >=1s spaced request (all hosts share one queue). as: 'json' (default) | 'text' | 'jsonp' | 'response'.
+// opts.form: object -> POST application/x-www-form-urlencoded. opts.ignoreDeadline: cart cleanup must run even after the
+// call deadline (still has the per-request timeout and the 1 s spacing).
+// Every request has a timeout (AbortSignal, FETCH_TIMEOUT_MS, shortened to the time left before the call deadline).
 function politeFetch(url, as = 'json', opts = {}) {
+  const ctx = callCtx.getStore();
   const run = async () => {
     const wait = last + MIN_GAP_MS - Date.now();
+    const deadline = ctx && !opts.ignoreDeadline ? ctx.deadline : Infinity;
+    // don't start a request that cannot finish usefully before the deadline (keep ~300 ms to build the reply)
+    if (Date.now() + Math.max(0, wait) + 300 >= deadline) throw new DeadlineError(`call deadline reached before requesting ${url}`);
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    const timeout = Math.max(200, Math.min(FETCH_TIMEOUT_MS, deadline - Date.now() - 300));
+    const signal = AbortSignal.timeout(timeout);
     try {
       const headers = { 'User-Agent': 'skz46-official-plugin/' + VERSION, Accept: 'application/json,text/html,*/*' };
       const init = opts.form ? { method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(opts.form).toString() } : { headers };
+      init.signal = signal;
       if (opts.jar) { // per-call isolated cookie jar (Map), manual redirects; used only by check_store_stock
         init.redirect = 'manual';
         if (opts.jar.size) init.headers = { ...init.headers, Cookie: [...opts.jar].map(([k, v]) => `${k}=${v}`).join('; ') };
       }
-      const res = await fetch(url, init);
-      if (opts.jar) for (const c of (res.headers.getSetCookie ? res.headers.getSetCookie() : [])) { const m = /^([^=;\s]+)=([^;]*)/.exec(c); if (m) opts.jar.set(m[1], m[2]); }
-      const text = await res.text();
+      let res, text;
+      try {
+        res = await fetch(url, init);
+        if (opts.jar) for (const c of (res.headers.getSetCookie ? res.headers.getSetCookie() : [])) { const m = /^([^=;\s]+)=([^;]*)/.exec(c); if (m) opts.jar.set(m[1], m[2]); }
+        text = await res.text();
+      } catch (e) {
+        if (signal.aborted || (e && (e.name === 'TimeoutError' || e.name === 'AbortError'))) {
+          if (Date.now() + 300 >= deadline) throw new DeadlineError(`call deadline reached while requesting ${url}`);
+          throw new UpstreamTimeoutError(`upstream timeout after ${timeout} ms for ${url}`);
+        }
+        throw e;
+      }
       const rec = rawStore.getStore();
       if (rec) rec.push({ url, method: init.method || 'GET', http_status: res.status, content_type: res.headers.get('content-type'),
         fetched_at: new Date().toISOString(), sha256: crypto.createHash('sha256').update(text, 'utf8').digest('hex'), body: text });
@@ -66,27 +93,45 @@ const NEWS_CATEGORY_LABELS = { release: 'リリース', goods: 'グッズ', even
   audition: 'オーディション', shakehands: 'ミート＆グリート', other: 'その他', fanclub: 'ファンクラブ' };
 
 // ---------- tools ----------
+const excerpt = (html, n = 120) => { if (!html) return null; const t = String(html).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ')
+  .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim(); return t ? (t.length > n ? t.slice(0, n) + '…' : t) : null; };
 function checkOffset(o) { if (o !== undefined && !(Number.isInteger(o) && o >= 0)) throw new Error('offset must be a non-negative integer'); }
 const tools = {
   list_news: {
-    description: 'List official news from sakurazaka46.com (max 200 per call, newest first). Use for latest announcements, releases, events, media appearances, tickets.',
+    description: 'List official news from sakurazaka46.com (newest first). Default: 20 short items (no article body; content_excerpt only). include_content:true adds the full HTML body; limit up to 200; offset pages. Responses over max_bytes are cut at an item boundary with truncated:true and a next hint.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {
       dy: { type: 'string', pattern: '^\\d{4}(\\d{2}(\\d{2})?)?$', description: 'YYYY, YYYYMM or YYYYMMDD. Omit for all news.' },
       category: { type: 'string', enum: CATEGORIES },
-      offset: { type: 'integer', minimum: 0, description: '0-based offset (upstream st). Page size 200.' },
-      include_content: { type: 'boolean', default: true, description: 'Include the article HTML body as content (default true; set false for a lighter response).' } } },
+      offset: { type: 'integer', minimum: 0, description: '0-based offset (upstream st).' },
+      limit: { type: 'integer', minimum: 1, maximum: 200, default: 20, description: 'Items to return (default 20, max 200; upstream returns at most 200 per request).' },
+      include_content: { type: 'boolean', default: false, description: 'Include the full article HTML body as content (default false since v0.4.2: without it, content is omitted and content_excerpt (plain text, ~120 chars) is given).' },
+      max_bytes: { type: 'integer', minimum: 10000, maximum: 20000000, description: `Byte cap for the JSON items (default ${MAX_RESPONSE_BYTES}, env SKZ46_MAX_RESPONSE_BYTES). Whole items are dropped from the end when exceeded (truncated:true + next hint). The raw:true upstream body is never cut.` } } },
     async run(a) {
       if (a.dy !== undefined && !/^\d{4}(\d{2}(\d{2})?)?$/.test(a.dy)) throw new Error('dy must be YYYY, YYYYMM or YYYYMMDD');
       if (a.category !== undefined && !CATEGORIES.includes(a.category)) throw new Error('category must be one of ' + CATEGORIES.join(', '));
       checkOffset(a.offset);
+      const limit = a.limit === undefined ? 20 : a.limit;
+      if (!(Number.isInteger(limit) && limit >= 1 && limit <= 200)) throw new Error('limit must be an integer 1..200');
+      const maxBytes = a.max_bytes === undefined ? MAX_RESPONSE_BYTES : a.max_bytes;
+      if (!(Number.isInteger(maxBytes) && maxBytes >= 10000)) throw new Error('max_bytes must be an integer >= 10000');
+      const full = a.include_content === true;
       const q = new URLSearchParams();
       if (a.dy) q.set('dy', a.dy); if (a.category) q.set('cd', a.category); if (a.offset) q.set('st', String(a.offset));
       const d = await politeFetch(API + 'json/news' + (q.toString() ? '?' + q : ''));
-      const items = (d.news || []).map(n => clean({ kind: 'news', id: n.code, title: n.title, caption: n.caption, url: abs(n.link),
+      const all = (d.news || []).slice(0, limit).map(n => clean({ kind: 'news', id: n.code, title: n.title, caption: n.caption, url: abs(n.link),
         published_at: jstIso(n.pubdate), pubdate: n.pubdate, category: n.category, category_label: NEWS_CATEGORY_LABELS[n.category],
         tags: Array.isArray(n.tags) ? n.tags.map(String) : n.tags, thumbnail: img(n.thumbnail),
-        ...(a.include_content === false ? {} : { content: n.content }) }));
-      return { total: toInt(d.count) ?? items.length, offset: a.offset || 0, items };
+        ...(full ? { content: n.content } : { content_excerpt: excerpt(n.content) }) }));
+      const items = []; let bytes = 0, byteCut = false;
+      for (const it of all) { const sz = Buffer.byteLength(JSON.stringify(it), 'utf8') + 1;
+        if (items.length && bytes + sz > maxBytes) { byteCut = true; break; } items.push(it); bytes += sz; }
+      const offset = a.offset || 0; const total = toInt(d.count) ?? items.length;
+      const more = offset + items.length < total;
+      const out = { total, offset, limit, returned: items.length, include_content: full, items, has_more: more,
+        truncated: byteCut, truncated_reason: byteCut ? `max_bytes ${maxBytes} reached: ${all.length - items.length} item(s) not returned` : null, items_bytes: bytes };
+      const { raw, ...rest } = a;
+      out.next = more ? [{ tool: 'list_news', params: { ...rest, offset: offset + items.length }, why: byteCut ? 'continue after the byte cap' : 'next page' }] : null;
+      return out;
     } },
   list_blog_posts: {
     description: 'List member blog posts (ブログ/部落格; title/link/member/time only, NO body). Max 200 per call, newest first. Filter by member_id or member (name/kana/romaji/alias).',
@@ -134,7 +179,7 @@ Object.assign(tools, require('./store-tools.js')({ politeFetch, clean }));
 tools.resolve_member = require('./members.js').resolve_member;
 // Short 'Use for / Not for' descriptions (+ examples) for weak models; ask is listed first as the entry point.
 const DESC = {
-  list_news: 'Use for: official news (新聞/ニュース/公告) by month or category. Not for: blog posts or the TV/radio schedule. e.g. "10月有什麼新聞", "グッズのお知らせ".',
+  list_news: 'Use for: official news (新聞/ニュース/公告) by month or category. Default 20 short items (no body; content_excerpt); include_content:true for full HTML, limit<=200, offset paging, byte cap -> truncated+next. Not for: blog posts or the TV/radio schedule. e.g. "10月有什麼新聞", "グッズのお知らせ".',
   list_blog_posts: 'Use for: latest member blog posts (ブログ/部落格) list, optionally one member (member name/alias ok). Not for: the blog text (use get_blog_post). e.g. "石森璃花 最新blog".',
   get_blog_post: 'Use for: full text + images of one blog post by id (from list_blog_posts). Not for: finding posts. e.g. "read blog 71404".',
   list_meet_greet_events: 'Use for: list of MEET&GREET / 見面會 / ミーグリ / 握手 events (codes). Not for: session times (then call get_meet_greet_event). e.g. "16單見面會有哪些".',
@@ -149,11 +194,11 @@ const DESC = {
   list_store_categories: 'Use for: official goods store (周邊/グッズ) category list. Not for: products. e.g. "商店有哪些分類".',
   list_store_products: 'Use for: searching/browsing store products (周邊/グッズ) by keyword/category/page. Not for: stock depth. e.g. "タオル 周邊".',
   get_store_product: 'Use for: one store product: price, variations, public in_stock/SOLD OUT. Not for: stock counts. e.g. "product 12345 有貨嗎".',
-  check_store_stock: 'Use for: "is there at least N in stock" via a temporary guest cart on the live store (always emptied; no checkout). Not for: browsing; prefer get_store_product first. e.g. "還剩很多嗎".',
+  check_store_stock: 'Use for: "is it in stock" via a temporary guest cart on the live store (default probe_quantity 1; up to 50 only to check "at least N"). Always emptied and verified (cart_cleanup ok/failed); no checkout. Not for: browsing; prefer get_store_product first. e.g. "還有貨嗎".',
   resolve_member: 'Use for: member name/kana/romaji/nickname/zh spelling -> member_id, or "all". Not for: blog/schedule (those accept member names directly). e.g. "谷口爱季 是誰".',
 };
 for (const [k, d] of Object.entries(DESC)) if (tools[k]) tools[k].description = d;
-{ const { ask } = require('./router.js')({ tools }); const rest = { ...tools }; for (const k of Object.keys(tools)) delete tools[k]; Object.assign(tools, { ask }, rest); }
+{ const { ask } = require('./router.js')({ tools, remainingMs, DEADLINE_MS }); const rest = { ...tools }; for (const k of Object.keys(tools)) delete tools[k]; Object.assign(tools, { ask }, rest); }
 // Follow-up hints: suggested next tool + params (first few items only).
 function nextHints(name, args, out) {
   const it = (out && out.items) || [];
@@ -164,7 +209,7 @@ function nextHints(name, args, out) {
     list_special_pages: () => it.slice(0, 3).map(s => ({ tool: 'get_special_page', params: { slug: s.slug }, why: 'page content' })),
     list_store_categories: () => it.slice(0, 3).map(c => ({ tool: 'list_store_products', params: { category_id: String(c.id) }, why: 'products' })),
     list_store_products: () => it.slice(0, 3).map(p => ({ tool: 'get_store_product', params: { product_id: String(p.product_id) }, why: 'price/variations/in_stock' })),
-    get_store_product: () => out.product_id ? [{ tool: 'check_store_stock', params: { product_id: String(out.product_id) }, why: 'at-least-N stock (guest cart probe)' }] : [],
+    get_store_product: () => out.product_id ? [{ tool: 'check_store_stock', params: { product_id: String(out.product_id) }, why: 'in-stock check (guest cart probe, quantity 1; probe_quantity up to 50 for at-least-N)' }] : [],
     resolve_member: () => it.length === 1 ? [{ tool: 'list_blog_posts', params: { member_id: it[0].member_id } }, { tool: 'get_schedule', params: { member: it[0].member_id } }] : [],
     get_formation: () => out.discography_codes ? out.discography_codes.slice(0, 1).map(c => ({ tool: 'get_discography', params: { code: c }, why: 'track list' })) : [],
   };
@@ -204,11 +249,14 @@ async function handle(msg) {
         try {
           const { raw, ...args } = params.arguments || {};
           let out;
-          if (raw === true) { const rec = []; out = await rawStore.run(rec, () => t.run(args)); out = { ...out, raw: rec }; }
-          else out = await t.run(args);
+          const runIt = () => callCtx.run({ deadline: Date.now() + DEADLINE_MS }, () => t.run(args));
+          if (raw === true) { const rec = []; out = await rawStore.run(rec, runIt); out = { ...out, raw: rec }; }
+          else out = await runIt();
           if (out && typeof out === 'object' && !Array.isArray(out) && !('next' in out)) out = { ...out, next: params.name === 'ask' ? askNext(out) : nextHints(params.name, args, out) };
           return reply(id, { content: [{ type: 'text', text: JSON.stringify(out) }], structuredContent: out, isError: false });
-        } catch (e) { return reply(id, { content: [{ type: 'text', text: 'Error: ' + e.message }], isError: true }); }
+        } catch (e) {
+          const msg = e && e.code === 'DEADLINE' ? `${e.message} (whole-call deadline ${DEADLINE_MS} ms, env SKZ46_DEADLINE_MS). No result was produced; this is NOT a "no results" answer. Retry, or narrow the request.` : e.message;
+          return reply(id, { content: [{ type: 'text', text: 'Error: ' + msg }], isError: true }); }
       }
       default: if (isReq) return fail(id, -32601, 'Method not found: ' + method);
     }
@@ -220,7 +268,9 @@ process.stdin.on('data', c => { buf += c; let i;
   while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line) continue;
     let m; try { m = JSON.parse(line); } catch { fail(null, -32700, 'Parse error'); continue; }
     (Array.isArray(m) ? m : [m]).forEach(track); } });
-// Exit only after every in-flight request has replied (tools may chain several upstream calls).
-let inflight = 0, ended = false;
-function track(m) { inflight++; Promise.resolve(handle(m)).finally(() => { inflight--; if (ended && !inflight) process.exit(0); }); }
-process.stdin.on('end', () => { ended = true; if (!inflight) process.exit(0); });
+// Exit only after every in-flight request has replied (tools may chain several upstream calls), and only after stdout has
+// been flushed: a client that closes stdin right after sending must still receive every reply in full.
+let inflight = 0, ended = false, exiting = false;
+function drainAndExit() { if (exiting) return; exiting = true; process.stdout.write('', () => process.exit(0)); }
+function track(m) { inflight++; Promise.resolve(handle(m)).finally(() => { inflight--; if (ended && !inflight) drainAndExit(); }); }
+process.stdin.on('end', () => { ended = true; if (!inflight) drainAndExit(); });
