@@ -4,7 +4,7 @@
 const ORIGIN = 'https://sakurazaka46.com';
 const API = ORIGIN + '/s/s46/api/';
 const MIN_GAP_MS = 1000;
-const VERSION = '0.4.2';
+const VERSION = '0.4.3';
 const CATEGORIES = ['release', 'goods', 'event', 'media', 'ticket', 'audition'];
 const envInt = (k, d, min) => { const v = Number(process.env[k]); return Number.isFinite(v) && v >= min ? Math.floor(v) : d; };
 // Whole tools/call deadline (all upstream requests of one call, including queue wait) and per-request timeout.
@@ -227,6 +227,7 @@ function nextHints(name, args, out) {
 function askNext(out) { const r = out.result; if (!r) return null; const i = out.interpreted_as.intent;
   const t = { blog: 'list_blog_posts', news: null, discography: 'list_discography', store: 'list_store_products', special: 'list_special_pages', member: 'resolve_member', formation: 'get_formation', center: 'get_formation' }[i];
   if (i === 'meet_greet' && r.events) return nextHints('list_meet_greet_events', {}, { items: r.events });
+  if ((i === 'store' || i === 'store_stock') && r.store_next) return r.store_next;
   if (i === 'store_stock' && r.products) return nextHints('list_store_products', {}, { items: r.products });
   if (i === 'store_stock' && r.product) return nextHints('get_store_product', {}, r.product);
   return t ? nextHints(t, {}, r) : null; }
@@ -234,6 +235,59 @@ function askNext(out) { const r = out.result; if (!r) return null; const i = out
 // {url, method, http_status, content_type, fetched_at (ISO UTC), sha256 (hex of the UTF-8 body), body (raw text)}.
 for (const t of Object.values(tools)) t.inputSchema.properties = { ...t.inputSchema.properties,
   raw: { type: 'boolean', default: false, description: 'Also return raw upstream responses (url, http_status, fetched_at, sha256, body) for every request this call made.' } };
+
+// ---------- product images as MCP image content (v0.4.3) ----------
+// Store tools attach real image blocks ({type:'image', data: base64, mimeType}) next to the JSON text so clients can show
+// product pictures. Only the store image hosts are fetched; own queue with >=300 ms spacing (CDN host, not the site's
+// HTML queue), 10 s timeout, per-image and total byte caps. Failures are skipped and listed, never fatal.
+// SKZ46_DISABLE_IMAGES=1 turns it off. Image fetches are not part of raw:true records.
+const IMAGE_HOSTS = /^(storage-store\.plusmember\.jp|store\.plusmember\.jp|image\.emtg\.jp)$/i;
+const IMG_MAX_EACH = envInt('SKZ46_IMAGE_MAX_BYTES', 400000, 1000), IMG_MAX_TOTAL = envInt('SKZ46_IMAGES_MAX_TOTAL_BYTES', 1500000, 100), IMG_GAP_MS = 300;
+const IMG_TYPES = /^image\/(jpeg|png|gif|webp)$/i;
+let imgChain = Promise.resolve(), imgLast = 0;
+function imageFetch(url) {
+  const run = async () => {
+    const wait = imgLast + IMG_GAP_MS - Date.now(); if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': 'skz46-official-plugin/' + VERSION, Accept: 'image/*' }, signal: AbortSignal.timeout(10000) });
+      if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+      const type = String(res.headers.get('content-type') || '').split(';')[0].trim();
+      if (!IMG_TYPES.test(type)) throw new Error(`not an image (${type || 'no content-type'})`);
+      const len = Number(res.headers.get('content-length')); if (len > IMG_MAX_EACH) throw new Error(`too large (${len} bytes > ${IMG_MAX_EACH})`);
+      const buf = Buffer.from(await res.arrayBuffer()); if (buf.length > IMG_MAX_EACH) throw new Error(`too large (${buf.length} bytes > ${IMG_MAX_EACH})`);
+      return { mimeType: type.toLowerCase(), data: buf };
+    } finally { imgLast = Date.now(); }
+  };
+  const p = imgChain.then(run, run); imgChain = p.catch(() => {}); return p;
+}
+const imageArg = { type: 'integer', minimum: 0, maximum: 12, description: 'How many product pictures to attach as MCP image content (0 = none). Image URLs stay in the JSON either way. Capped at ~1.5 MB total; skipped ones are listed in images_skipped. Off server-wide with SKZ46_DISABLE_IMAGES=1.' };
+const IMAGE_DEFAULTS = { list_store_products: 6, get_store_product: 1, ask: 6 };
+for (const [k] of Object.entries(IMAGE_DEFAULTS)) if (tools[k]) tools[k].inputSchema.properties.max_images = { ...imageArg, default: IMAGE_DEFAULTS[k] };
+function imageCandidates(name, out) {
+  const fromList = l => (l || []).map(i => i && i.thumbnail && { url: i.thumbnail, product_id: i.product_id, name: i.name }).filter(Boolean);
+  const fromProd = p => p ? [p.image || (p.images || [])[0]].filter(Boolean).map(url => ({ url, product_id: p.product_id, name: p.name })) : [];
+  if (name === 'list_store_products') return fromList(out.items);
+  if (name === 'get_store_product') return fromProd(out);
+  if (name === 'ask' && out.interpreted_as && /^store/.test(out.interpreted_as.intent || '') && out.result) { const r = out.result; return r.product ? fromProd(r.product) : fromList(r.items || r.products); }
+  return [];
+}
+async function attachImages(name, max, out) {
+  const cands = imageCandidates(name, out); if (!cands.length) return null;
+  if (process.env.SKZ46_DISABLE_IMAGES === '1') return { blocks: [], meta: { images_attached: [], images_skipped: null, images_note: 'image attachments disabled on this server (SKZ46_DISABLE_IMAGES=1)' } };
+  if (max === 0) return null;
+  const blocks = [], attached = [], skipped = []; let total = 0;
+  for (const c of cands.slice(0, max)) {
+    let host = ''; try { host = new URL(c.url).hostname; } catch {}
+    if (!IMAGE_HOSTS.test(host)) { skipped.push({ url: c.url, product_id: c.product_id || null, reason: 'host not allowed' }); continue; }
+    try { const img = await imageFetch(c.url);
+      if (total + img.data.length > IMG_MAX_TOTAL) { skipped.push({ url: c.url, product_id: c.product_id || null, reason: `total image cap ${IMG_MAX_TOTAL} bytes reached` }); continue; }
+      total += img.data.length; blocks.push({ type: 'image', data: img.data.toString('base64'), mimeType: img.mimeType });
+      attached.push({ index: blocks.length, url: c.url, product_id: c.product_id || null, name: c.name || null, mimeType: img.mimeType, bytes: img.data.length });
+    } catch (e) { skipped.push({ url: c.url, product_id: c.product_id || null, reason: e.message }); }
+  }
+  if (cands.length > max) skipped.push({ url: null, product_id: null, reason: `${cands.length - max} more item(s) not attached (max_images ${max})` });
+  return { blocks, meta: { images_attached: attached, images_skipped: skipped.length ? skipped : null, images_bytes: total } };
+}
 
 // ---------- JSON-RPC over stdio ----------
 const send = m => process.stdout.write(JSON.stringify(m) + '\n');
@@ -254,7 +308,10 @@ async function handle(msg) {
         const t = tools[params.name];
         if (!t) return fail(id, -32602, 'Unknown tool: ' + params.name);
         try {
-          const { raw, ...args } = params.arguments || {};
+          const { raw, ...rawArgs } = params.arguments || {};
+          const { max_images, ...args } = IMAGE_DEFAULTS[params.name] !== undefined ? rawArgs : { max_images: undefined, ...rawArgs };
+          const maxImages = max_images === undefined ? IMAGE_DEFAULTS[params.name] : max_images;
+          if (maxImages !== undefined && !(Number.isInteger(maxImages) && maxImages >= 0 && maxImages <= 12)) throw new Error('max_images must be an integer 0..12');
           let out;
           // MCP progress notifications (when the client sent _meta.progressToken) during long history walks, so hosts that
           // reset their request timeout on progress keep waiting.
@@ -264,7 +321,9 @@ async function handle(msg) {
           if (raw === true) { const rec = []; out = await rawStore.run(rec, runIt); out = { ...out, raw: rec }; }
           else out = await runIt();
           if (out && typeof out === 'object' && !Array.isArray(out) && !('next' in out)) out = { ...out, next: params.name === 'ask' ? askNext(out) : nextHints(params.name, args, out) };
-          return reply(id, { content: [{ type: 'text', text: JSON.stringify(out) }], structuredContent: out, isError: false });
+          let imageBlocks = [];
+          if (maxImages !== undefined && out && typeof out === 'object') { const im = await attachImages(params.name, maxImages, out); if (im) { out = { ...out, ...im.meta }; imageBlocks = im.blocks; } }
+          return reply(id, { content: [{ type: 'text', text: JSON.stringify(out) }, ...imageBlocks], structuredContent: out, isError: false });
         } catch (e) {
           const msg = e && e.code === 'DEADLINE' ? `${e.message} (opt-in whole-call deadline ${DEADLINE_MS} ms set via env SKZ46_DEADLINE_MS). No result was produced; this is NOT a "no results" answer. Retry, or narrow the request.` : e.message;
           return reply(id, { content: [{ type: 'text', text: 'Error: ' + msg }], isError: true }); }

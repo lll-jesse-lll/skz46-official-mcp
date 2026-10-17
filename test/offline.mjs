@@ -12,7 +12,7 @@ function server(env) {
   let buf = '', nid = 0; const pend = new Map(); const notes = [];
   srv.stdout.on('data', c => { buf += c; let i; while ((i = buf.indexOf('\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1); if (m.id === undefined) { notes.push(m); continue; } pend.get(m.id)?.(m); pend.delete(m.id); } });
   const rpc = (method, params) => new Promise(r => { const id = ++nid; pend.set(id, r); srv.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n'); });
-  const call = async (name, args, meta) => { const t0 = Date.now(); const m = await rpc('tools/call', { name, arguments: args, ...(meta ? { _meta: meta } : {}) }); return { ms: Date.now() - t0, isError: m.result.isError, out: m.result.structuredContent, text: m.result.content[0].text, bytes: Buffer.byteLength(m.result.content[0].text) }; };
+  const call = async (name, args, meta) => { const t0 = Date.now(); const m = await rpc('tools/call', { name, arguments: args, ...(meta ? { _meta: meta } : {}) }); return { ms: Date.now() - t0, isError: m.result.isError, out: m.result.structuredContent, text: m.result.content[0].text, content: m.result.content, bytes: Buffer.byteLength(m.result.content[0].text) }; };
   return { srv, rpc, call, notes, close: () => srv.stdin.end() };
 }
 const prevMonth = m => { let [y, mo] = m.split('-').map(Number); if (--mo < 1) { mo = 12; y--; } return `${y}-${String(mo).padStart(2, '0')}`; };
@@ -127,6 +127,46 @@ try {
     { const { st, tool } = ST({ addThrows: true }); await assert.rejects(tool.run({ product_id: '1' }), /stock probe failed: upstream timeout; cart_cleanup=ok/);
       ok('probe error during add -> error that still states cart_cleanup'); }
   }
+  // ---- 6. store keywords from fan questions (v0.4.3): filler removed, member as separate terms, zero explained ----
+  { const log = path.join(os.tmpdir(), `skz46-store-${process.pid}.log`); fs.rmSync(log, { force: true });
+    const s = server({ MOCK_FETCH: 'empty', MOCK_LOG: log });
+    const a = await s.call('ask', { query: '現在有哪些石森璃花的推しメンタオル' }); const r = a.out.result;
+    assert.equal(a.isError, false, a.text); assert.equal(a.out.interpreted_as.intent, 'store'); assert.deepEqual(r.items.map(i => i.product_id), ['901', '902']);
+    assert.deepEqual(r.searched.map(x => x.keyword), ['石森 璃花 推しメン タオル']);
+    const b = await s.call('ask', { query: '目前有什麼りか的推しメンタオル' }); assert.deepEqual(b.out.result.items.map(i => i.product_id), ['901', '902']);
+    const c = await s.call('ask', { query: '還有沒有山崎天的毛巾呢' }); assert.equal(c.out.interpreted_as.intent, 'store_stock'); assert.equal(c.out.result.product.product_id, '903');
+    const names = fs.readFileSync(log, 'utf8').split('\n').filter(l => /list\.php/.test(l)).map(l => new URL(l.split(' ')[1]).searchParams.get('name'));
+    assert.ok(names.length >= 3 && names.every(n => !/現在|有哪些|目前|有什麼|還有|沒有|呢|嗎/.test(n)), JSON.stringify(names));
+    ok(`store ask: filler stripped, member split (石森 璃花 / りか / 山崎天→山﨑 天), 毛巾→タオル; store keywords sent: ${[...new Set(names)].join(' | ')}`);
+    const z = await s.call('ask', { query: '有沒有中島優月生寫真' }); const zr = z.out.result;
+    assert.equal(zr.total, 0); assert.deepEqual(zr.searched.map(x => [x.keyword, x.total]), [['中嶋 優月 生写真', 0], ['中嶋 優月', 1], ['生写真', 1]]);
+    assert.match(zr.note, /"中嶋 優月 生写真" \(0\)/); assert.equal(z.out.next[0].tool, 'list_store_products'); assert.equal(z.out.next[0].params.keyword, '中嶋 優月');
+    ok('store zero is explained: every searched keyword + total listed (all terms, member only, product only) and next suggests member/product searches');
+    const ex = await s.call('ask', { query: '石森璃花 推しメンタオル 限定版' }); assert.deepEqual(ex.out.result.searched.map(x => x.keyword), ['石森 璃花 推しメン タオル 限定版', '石森 璃花 推しメン タオル']); assert.equal(ex.out.result.items.length, 2);
+    ok('unrecognized extra word (限定版) -> retried without it, both searches reported');
+    s.close(); fs.rmSync(log, { force: true }); }
+  // ---- 7. product pictures as MCP image content blocks (v0.4.3) ----
+  { const s = server({ MOCK_FETCH: 'empty' });
+    const l = await s.call('list_store_products', { keyword: '推しメン タオル' });
+    const imgs = l.content.filter(c => c.type === 'image'); assert.equal(l.content[0].type, 'text');
+    assert.ok(imgs.length >= 2 && imgs.every(c => c.mimeType === 'image/png' && Buffer.from(c.data, 'base64').subarray(0, 4).toString('hex') === '89504e47'));
+    assert.ok(l.out.images_skipped.some(x => x.product_id === '902' && /too large/.test(x.reason)), 'big image skipped');
+    assert.equal(l.out.images_attached.length, imgs.length); assert.ok(l.out.items.every(i => /^https:/.test(i.thumbnail)), 'URLs stay in text');
+    const g = await s.call('get_store_product', { product_id: '903' }); const gi = g.content.filter(c => c.type === 'image');
+    assert.equal(gi.length, 1); assert.equal(g.out.images_attached[0].url, 'https://storage-store.plusmember.jp/upload/save_image/main_903.png');
+    const a = await s.call('ask', { query: '石森璃花 キーホルダー' }); assert.ok(a.out.images_skipped.some(x => x.product_id === '904' && /HTTP 404/.test(x.reason)), 'failed image skipped, not fatal'); assert.equal(a.isError, false);
+    const a2 = await s.call('ask', { query: '現在有哪些石森璃花的推しメンタオル' }); assert.ok(a2.content.some(c => c.type === 'image'));
+    const z = await s.call('list_store_products', { keyword: '推しメン タオル', max_images: 0 }); assert.equal(z.content.length, 1); assert.equal(z.out.images_attached, undefined);
+    const one = await s.call('list_store_products', { keyword: '推しメン タオル', max_images: 1 }); assert.equal(one.content.filter(c => c.type === 'image').length, 1); assert.ok(one.out.images_skipped.some(x => /max_images 1/.test(x.reason)));
+    const bad = await s.call('list_store_products', { keyword: 'x', max_images: 99 }); assert.equal(bad.isError, true);
+    const nw = await s.call('list_news', {}); assert.equal(nw.content.length, 1);
+    ok(`image content: list attaches ${imgs.length} PNG blocks, oversize (600 KB) and 404 images skipped with reasons, get_store_product main image, ask store results, max_images 0/1, non-store tools untouched`);
+    s.close(); }
+  { const s = server({ MOCK_FETCH: 'empty', SKZ46_DISABLE_IMAGES: '1', SKZ46_IMAGES_MAX_TOTAL_BYTES: '' });
+    const l = await s.call('list_store_products', { keyword: '推しメン タオル' }); assert.equal(l.content.length, 1); assert.match(l.out.images_note, /SKZ46_DISABLE_IMAGES=1/); s.close(); }
+  { const s = server({ MOCK_FETCH: 'empty', SKZ46_IMAGES_MAX_TOTAL_BYTES: '100' });
+    const l = await s.call('list_store_products', { keyword: '推しメン タオル' }); const n = l.content.filter(c => c.type === 'image').length; assert.ok(l.out.images_skipped.some(x => /total image cap/.test(x.reason)) && l.out.images_bytes <= 100 && n === 1, JSON.stringify(l.out.images_skipped));
+    ok(`image switches: SKZ46_DISABLE_IMAGES=1 -> text only + note; total byte cap -> ${n} attached, rest skipped with reason`); s.close(); }
   // special page / blog caps
   { const SP = req(path.join(root, 'server/special-tools.js'))({ politeFetch: async () => `<html><body><main><p>${'あ'.repeat(30000)}</p></main></body></html>`, clean: o => o, ORIGIN: 'https://sakurazaka46.com' });
     const a = await SP.get_special_page.run({ slug: 'x', max_chars: 1000 }); assert.equal(a.text.length, 1000); assert.equal(a.truncated, true); assert.equal(a.text_length, 30000);

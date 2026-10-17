@@ -18,7 +18,7 @@ const RULES = [
   ['blog', /(blog|ブログ|部落格|博客|日記|日记)/i],
   ['greeting', /(問候卡|问候卡|グリーティング|greeting|賀卡|贺卡)/i],
   ['discography', /(專輯|专辑|アルバム|album|ディスコ|discography|曲目|收錄|收录|收録|特典|発売日|發售|发售|tracklist|ジャケ)/i],
-  ['store', /(周邊|周边|グッズ|goods|商品|ストア|store|官方商店|買|购买|購買|通販)/i],
+  ['store', /(周邊|周边|週邊|グッズ|goods|merch|商品|ストア|store|官方商店|買|购买|購買|通販|マフラータオル|タオル|毛巾|推しメン|生寫真|生写真|アクリルスタンド|アクスタ|立牌|キーホルダー|鑰匙圈|钥匙圈|Tシャツ|T恤|パーカー|ペンライト|螢光棒|荧光棒|缶バッジ|ラバーバンド|トートバッグ|ステッカー)/i],
   ['news', /(新聞|新闻|ニュース|news|消息|公告|お知らせ|情報解禁|官宣)/i],
   ['special', /(演唱會|演唱会|ライブ|live|巡演|ツアー|tour|公演|special|特設|backs\s*live|周年)/i],
   ['schedule', /(行程|スケジュール|schedule|日程|出演|上節目|上节目|電視|电视|テレビ|tv|廣播|广播|ラジオ|radio|雜誌|杂志|雑誌|magazine|配信|活動|活动|予定|安排)/i],
@@ -98,8 +98,48 @@ const CITIES = [['京都', ['京都', 'kyoto']], ['東京', ['東京', '东京',
   ['仙台', ['仙台', 'sendai']], ['広島', ['広島', '廣島', '广岛', 'hiroshima']], ['神戸', ['神戸', '神戶', 'kobe']], ['オンライン', ['オンライン', '線上', '线上', 'online', '網路', '网络']]];
 const parseCity = q => { const l = q.toLowerCase(); for (const [c, ks] of CITIES) if (ks.some(k => l.includes(k.toLowerCase()))) return c; };
 
-const STOP = /(還有貨|还有货|有貨|有货|有沒有貨|有没有货|嗎|吗|呢|\?|？|庫存|库存|在庫|周邊|周边|グッズ|官方|商店|的|是否|還|还|請問|请问|あります|か|は|ありますか|売り?切れ?|賣完了?|卖完了?|缺貨|缺货|stock|in|goods|store|搜尋|搜索|找|查)/gi;
-const keywordFrom = q => q.replace(STOP, ' ').replace(/\s+/g, ' ').trim();
+// ---------- store keyword building (v0.4.3) ----------
+// The store (EC-CUBE 2) name search ANDs space-separated terms as substrings; product names look like
+// "【通常配送】6th Anniversary 推しメンマフラータオル 石森 璃花". So a query must become separate terms
+// (member family + given name, product words), never one concatenated string with question words in it.
+// Store vocabulary: every term below was checked to return products on the live store on 2026-10-17.
+const STORE_VOCAB = ['マフラータオル', 'タオル', '推しメン', '生写真', 'アクリルスタンド', 'キーホルダー', 'Tシャツ', 'パーカー', 'ペンライト', '缶バッジ', 'ラバーバンド', 'トートバッグ', 'ステッカー'];
+// Obvious zh / fan spellings -> store term (longest first when applied).
+const STORE_ALIASES = [
+  [/(圍巾毛巾|围巾毛巾|應援毛巾|应援毛巾|マフラー毛巾)/g, 'マフラータオル'], [/(毛巾|浴巾)/g, 'タオル'],
+  [/(生寫真|生写真|生照)/g, '生写真'], [/(壓克力立牌|亞克力立牌|压克力立牌|亚克力立牌|壓克力|亞克力|压克力|亚克力|立牌|アクスタ)/g, 'アクリルスタンド'],
+  [/(鑰匙圈|钥匙圈|鑰匙扣|钥匙扣|吊飾|吊饰)/g, 'キーホルダー'], [/(T恤|t恤|T-shirt|tshirt|t-shirt)/gi, 'Tシャツ'], [/(帽T|連帽衫|连帽衫|帽衫)/g, 'パーカー'],
+  [/(螢光棒|荧光棒|應援棒|应援棒)/g, 'ペンライト'], [/(徽章|胸章)/g, '缶バッジ'], [/(手環|手环)/g, 'ラバーバンド'], [/(托特包)/g, 'トートバッグ'], [/(貼紙|贴纸)/g, 'ステッカー']];
+const STORE_TERM_RE = new RegExp('(' + STORE_VOCAB.join('|') + ')', 'g');
+// Conversational filler / question words (zh-Hant, zh-Hans, ja) and store/stock words: never sent as store keywords.
+const FILLER = ['還有沒有', '还有没有', '有沒有貨', '有没有货', '還有貨', '还有货', '沒有', '没有', '有沒有', '有没有', '有哪些', '有什麼', '有什么', '有啥', '是什麼', '是什么', '哪些', '什麼', '什么', '哪裡買', '哪里买',
+  '現在', '现在', '目前', '現時', '现时', '最近', '還有', '还有', '還剩', '还剩', '剩下', '請問', '请问', '想買', '想买', '想要', '可以買', '可以买', '買得到', '买得到', '能買', '能买', '幫我', '帮我',
+  '一下', '看看', '搜尋', '搜索', '查詢', '查询', '是否', '多少', '幾個', '几个', '全部', '所有', '一覽', '一览', '列表', '最新款', '新款', '款式',
+  'ありますか', 'あります', 'ありません', '売り切れ', '売切れ', '売り切', 'ですか', 'でしょうか', '教えて', 'ください', '在庫', '庫存', '库存', '有貨', '有货', '賣完了', '卖完了', '賣完', '卖完', '缺貨', '缺货', '補貨', '补货',
+  '官方商店', '官方', '商店', '周邊', '周边', '週邊', 'グッズ', '商品', '通販', '購買', '购买', '販売', 'ストア',
+  'sold out', 'in stock', 'stock', 'goods', 'store', 'merch', '嗎', '吗', '呢', '吧', '啊', '呀', '找', '查', '買', '买', '款', '種', '种', '個', '个'];
+const FILLER_RE = new RegExp('(' + [...FILLER].sort((a, b) => b.length - a.length).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+// Remove the text span that matched a member (findInText reports the normalized form), from the NFKC query.
+function removeMatched(q, matched) {
+  if (!matched) return q;
+  for (let i = 0; i < q.length; i++) for (let j = i + 1; j <= Math.min(q.length, i + matched.length * 2 + 2); j++)
+    if (norm(q.slice(i, j)) === matched) return q.slice(0, i) + ' ' + q.slice(j);
+  return q;
+}
+function storeQuery(q, members) {
+  const member = members.length === 1 ? members[0] : null;
+  let rest = q; for (const m of members) rest = removeMatched(rest, m.matched);
+  const removed = []; rest = rest.replace(FILLER_RE, w => { removed.push(w); return ' '; });
+  for (const [re, t] of STORE_ALIASES) rest = rest.replace(re, ` ${t} `);
+  const product_terms = []; rest = rest.replace(STORE_TERM_RE, t => { if (!product_terms.includes(t)) product_terms.push(t); return ' '; });
+  // leftovers: split on spaces/punctuation, trim particles; keep only plausible search words
+  const extra_terms = rest.split(/[\s、，,。．.!！?？\/／・「」『』()（）]+/).map(x => x.replace(/^[的のをはがもと和跟]+|[的のをはがもと和跟]+$/g, '').trim())
+    .filter(x => x && (x.length >= 2 || /[a-z0-9]/i.test(x)) && !/^[的のをはがもと和跟]+$/.test(x));
+  const member_terms = member ? member.name.split(/\s+/).filter(Boolean) : []; // official spelling, family + given as separate terms
+  return { member: member ? { member_id: member.member_id, name: member.name } : null, member_terms, product_terms, extra_terms, removed_words: removed.length ? removed : null,
+    keyword: [...member_terms, ...product_terms, ...extra_terms].join(' ') || null };
+}
+const keywordFrom = q => storeQuery(q, findInText(q)).keyword || '';
 
 function parse(query, opts = {}) {
   const q = String(query || '').normalize('NFKC').trim();
@@ -115,6 +155,7 @@ function parse(query, opts = {}) {
   if (!intent && single) intent = 'formation';
   if (!intent && members.length === 1) intent = 'blog'; // a bare member name: most common ask is the latest blog
   if (intent === 'store' && matched.includes('news')) intent = 'news';
+  if (intent === 'store' && /(還有沒有|还有没有|還剩|还剩)/.test(q)) intent = 'store_stock'; // "is there still any X" about a product
   if (intent === 'special' && !city && !/(演唱會|演唱会|ライブ|live|巡演|ツアー|tour|公演)/i.test(q) && (range || matched.includes('schedule'))) intent = 'schedule';
   if (qVenue && (!intent || ['special', 'schedule'].includes(intent))) intent = 'special';
   if (intent === 'special' && (qVenue || /(演唱會|演唱会|ライブ|live|巡演|ツアー|tour|公演)/i.test(q))) intent = 'live';
@@ -137,7 +178,11 @@ function parse(query, opts = {}) {
     case 'greeting': if (member) params.member_id = member.member_id; break;
     case 'news': if (range) params.dy = range.from.slice(0, 7).replace('-', ''); { const k = /(グッズ|周邊|周边|goods)/i.test(q) ? 'goods' : /(發售|发售|リリース|release|発売)/i.test(q) ? 'release' : /(活動|活动|イベント|event)/i.test(q) ? 'event' : /(門票|门票|チケット|ticket)/i.test(q) ? 'ticket' : undefined; if (k) params.category = k; } break;
     case 'discography': if (single) params.single = single; break;
-    case 'store': case 'store_stock': { const kw = keywordFrom(q); if (kw) params.keyword = kw; else notes.push('no product words found'); break; }
+    case 'store': case 'store_stock': { const sq = storeQuery(q, members);
+      if (sq.keyword) { params.keyword = sq.keyword; params.store_terms = { member: sq.member, member_terms: sq.member_terms, product_terms: sq.product_terms, extra_terms: sq.extra_terms }; }
+      else notes.push('no product words found');
+      if (sq.removed_words) notes.push('ignored question/filler words: ' + sq.removed_words.join(' '));
+      if (members.length > 1) notes.push('several members named; member not used in the store search'); break; }
     case 'special': break;
     case 'live': params.live_type = FEST_Q.test(q) ? 'festival' : 'solo'; if (qVenue) params.venue = qVenue.venue; if (city && city !== 'オンライン') params.city = city; if (range) params.date_range = { from: range.from, to: range.to }; break;
     case 'member': if (member) params.member_id = member.member_id; break;
@@ -245,13 +290,44 @@ module.exports = ({ tools, remainingMs = () => Infinity, DEADLINE_MS = Infinity,
     if (p.when === 'upcoming' && !hits.length) return { events_checked: cands.map(e => ({ code: e.code, title: e.title, date: e.date })), matches: [], none_upcoming: true, note: 'No upcoming session matches (JST).', ...pastHint() };
     return { events_checked: cands.map(e => ({ code: e.code, title: e.title, date: e.date })), matches: hits, total_matching_events: ev.length };
   }
+  // Store search (v0.4.3): AND of separate terms (member family/given name + product words), verified client-side.
+  // On 0 hits it relaxes step by step and always reports every keyword actually searched, so a zero is trustworthy.
+  const nameKey = t => String(t || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+  async function storeSearch(p) {
+    const st = p.store_terms || { member: null, member_terms: [], product_terms: [], extra_terms: p.keyword ? p.keyword.split(/\s+/) : [] };
+    const searched = [];
+    const run1 = async (terms, why) => { const keyword = terms.join(' '); const r = await call('list_store_products', { keyword });
+      // the store matched every term as a substring; re-check on our side (NFKC, spaces ignored) so nothing unrelated slips in
+      const items = r.items.filter(i => terms.every(t => nameKey(i.name).includes(nameKey(t))));
+      searched.push({ keyword, total: r.total ?? r.items.length, matched_on_page: items.length, why }); return { r, items }; };
+    const memberPlus = (...xs) => [...st.member_terms, ...xs.flat()];
+    if (!p.keyword) return { total: 0, items: [], searched, store_terms: st, note: 'no product or member words recognized in the question; nothing was searched' };
+    // 1) everything
+    let hit = await run1(memberPlus(st.product_terms, st.extra_terms), 'all terms');
+    // 2) drop unrecognized extra words
+    if (!hit.items.length && st.extra_terms.length && (st.member_terms.length || st.product_terms.length)) hit = await run1(memberPlus(st.product_terms), 'without unrecognized words');
+    if (hit.items.length) return { total: hit.r.total, items: hit.items.slice(0, 20), searched, store_terms: st, match: searched[searched.length - 1].why,
+      ...(hit.r.total > 50 ? { note: `${hit.r.total} matches; first page shown. Use list_store_products with keyword "${searched[searched.length - 1].keyword}" and page for more.` } : {}) };
+    // 3) zero: look at each side alone so the user can see why (member has goods but not this kind, or the product word is unknown)
+    const sides = {};
+    if (st.member_terms.length && st.product_terms.length) {
+      const m = await run1(st.member_terms, 'member only'); sides.member_only_total = m.r.total;
+      const pr = await run1(st.product_terms, 'product words only'); sides.product_only_total = pr.r.total;
+    }
+    const kws = searched.map(x => `"${x.keyword}" (${x.total})`).join(', ');
+    const next = [];
+    if (st.member_terms.length) next.push({ tool: 'list_store_products', params: { keyword: st.member_terms.join(' ') }, why: 'all goods for this member' });
+    if (st.product_terms.length) next.push({ tool: 'list_store_products', params: { keyword: st.product_terms.join(' ') }, why: 'this product type for all members' });
+    next.push({ tool: 'list_store_categories', params: {}, why: 'browse by category' });
+    return { total: 0, items: [], searched, store_terms: st, ...sides, store_next: next,
+      note: `No store product matched. Store searches made (name search, all words must appear): ${kws}. Question words were removed before searching, so this zero is for these exact keywords only.` };
+  }
   async function stock(p) {
-    if (!p.keyword) return { note: 'no product keyword recognized', items: [] };
-    const l = await call('list_store_products', { keyword: p.keyword });
+    const l = await storeSearch(p);
     const items = l.items.slice(0, 10);
-    if (items.length !== 1) return { products: items, total: l.total, note: items.length ? 'several products match: pick one and call get_store_product / check_store_stock' : 'no products found' };
+    if (items.length !== 1) return { ...l, products: items, note: l.note || (items.length ? 'several products match: pick one and call get_store_product / check_store_stock' : 'no products found') };
     const prod = await call('get_store_product', { product_id: items[0].product_id });
-    return { product: prod };
+    return { product: prod, searched: l.searched, store_terms: l.store_terms };
   }
   // Live/concerts: upcoming first (schedule label ライブ for the next 3 months + LIVE special pages); past only as labeled fallback.
   async function live(p) {
@@ -325,7 +401,7 @@ module.exports = ({ tools, remainingMs = () => Infinity, DEADLINE_MS = Infinity,
       const re = new RegExp(`^${p.single}(th|st|nd|rd)\\s*Single`, 'i');
       const items = l.items.filter(i => i.type && /single|シングル/i.test(i.type) && (re.test(i.title || '') || re.test(i.subtitle || '') || String(i.number) === String(p.single)));
       return { items: items.length ? items : l.items.filter(i => /single|シングル/i.test(i.type || '')).slice(0, 20), note: items.length ? null : 'could not match the single number by title; showing singles' }; },
-    store: p => call('list_store_products', p.keyword ? { keyword: p.keyword } : {}).then(r => ({ total: r.total, items: r.items.slice(0, 20) })),
+    store: p => p.keyword ? storeSearch(p) : call('list_store_products', {}).then(r => ({ total: r.total, items: r.items.slice(0, 20), searched: [{ keyword: null, total: r.total, why: 'no product words: newest products' }] })),
     store_stock: stock,
     special: () => specialPages().then(r => ({ total: r.total, items: r.items.slice(0, 20) })),
     member: p => call('resolve_member', { query: p.member_id || 'all' }),

@@ -1,4 +1,13 @@
-# skz46-official (v0.4.2)
+# skz46-official (v0.4.3)
+
+## v0.4.3 changes
+- **Store questions in `ask` no longer send question words to the store.** Before, 「現在有哪些石森璃花的推しメンタオル」 searched the store for 「現在有哪些石森璃花 推しメンタオル」 and got 0. Words like 現在／目前／有哪些／有什麼／有沒有／還有／嗎／呢／ありますか are removed first. The member is turned into the official spelling as separate terms (りか, 山崎天, 中島優月 → 石森 璃花, 山﨑 天, 中嶋 優月). Product words are split into store terms (推しメンタオル → 推しメン タオル). A few obvious zh terms are mapped, each to a term checked on the live store on 2026-10-17: 毛巾→タオル, 應援毛巾→マフラータオル, 生寫真→生写真, 立牌/アクスタ→アクリルスタンド, 鑰匙圈→キーホルダー, T恤→Tシャツ, 帽T→パーカー, 螢光棒→ペンライト, 徽章→缶バッジ, 手環→ラバーバンド, 托特包→トートバッグ, 貼紙→ステッカー.
+  - The store's name search requires every space-separated term (AND), so one search with member + product terms is the intersection. Results are re-checked against the terms. Unrecognized extra words are dropped in a second try.
+  - If nothing matches, the result lists every keyword searched with its total (all terms, member only, product only) and `next` suggests the member-only and product-only searches. The zero is for those exact keywords only.
+  - Result fields: `searched: [{keyword, total, matched_on_page, why}]`, `store_terms: {member, member_terms, product_terms, extra_terms}`, `match`, `note`.
+- **Product pictures as MCP image content.** `get_store_product` (main image), `list_store_products` and `ask` store answers (first 6 thumbnails) add `{type: 'image', data: <base64>, mimeType}` blocks after the JSON text. Image URLs stay in the JSON.
+  - `max_images` (0–12; 0 = none). Caps: 400 KB per image (`SKZ46_IMAGE_MAX_BYTES`), 1.5 MB total (`SKZ46_IMAGES_MAX_TOTAL_BYTES`). Only store image hosts are fetched (storage-store.plusmember.jp, store.plusmember.jp, image.emtg.jp), on their own queue at least 300 ms apart, with a 10 s timeout. Failed, oversize or non-image files are skipped and listed in `images_skipped` with a reason; `images_attached` lists what was sent.
+  - `SKZ46_DISABLE_IMAGES=1` turns images off (text only, `images_note` says so). Image downloads are not recorded in `raw: true`.
 
 Agent Plugin (Agent Plugins 1.0.0 format) that wraps the **public, no-login** JSON endpoints of https://sakurazaka46.com in a zero-dependency stdio MCP server (Node ≥ 18, uses the built-in `fetch`).
 

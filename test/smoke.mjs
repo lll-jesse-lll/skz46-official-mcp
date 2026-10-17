@@ -185,6 +185,15 @@ try {
   else ok('no SOLD OUT item on the sampled list pages (sold-out check skipped)');
   const badP = await rpc('tools/call', { name: 'get_store_product', arguments: { product_id: 'x1' } }); assert.equal(badP.result.isError, true); ok('get_store_product bad id -> isError');
 
+  // ---- v0.4.3: fan question -> store terms (no filler), product pictures as MCP image content ----
+  { const m = await rpc('tools/call', { name: 'ask', arguments: { query: '現在有哪些石森璃花的推しメンタオル' } }); const a = m.result.structuredContent;
+    assert.equal(a.interpreted_as.intent, 'store'); assert.equal(a.result.searched[0].keyword, '石森 璃花 推しメン タオル'); assert.ok(a.result.total > 0 && a.result.items.every(i => /推しメン/.test(i.name) && /石森\s*璃花/.test(i.name)));
+    const imgs = m.result.content.filter(c => c.type === 'image'); assert.ok(imgs.length >= 1 && imgs.every(c => /^image\//.test(c.mimeType) && c.data.length > 100)); assert.ok(a.images_bytes <= 1500000);
+    ok(`ask 現在有哪些石森璃花的推しメンタオル -> store keyword "${a.result.searched[0].keyword}", ${a.result.total} products, ${imgs.length} image blocks (${a.images_bytes} bytes)`);
+    const z = await call('ask', { query: '有沒有中島優月生寫真' }); assert.equal(z.result.total, 0); assert.ok(z.result.searched.length >= 1 && z.result.searched.every(x => !/有沒有/.test(x.keyword))); assert.match(z.result.note, /中嶋 優月 生写真/);
+    ok(`zero store result lists exact keywords: ${z.result.searched.map(x => `"${x.keyword}" (${x.total})`).join(', ')}`);
+    const g = await rpc('tools/call', { name: 'get_store_product', arguments: { product_id: '114889' } }); assert.equal(g.result.content.filter(c => c.type === 'image').length, 1);
+    ok('get_store_product attaches the main product image as an image content block'); }
   // ---- cart stock probe (live guest cart; skipped when SKZ46_DISABLE_CART_PROBE=1) ----
   if (process.env.SKZ46_DISABLE_CART_PROBE === '1') ok('check_store_stock live probe skipped (SKZ46_DISABLE_CART_PROBE=1)');
   else {

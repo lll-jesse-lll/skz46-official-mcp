@@ -668,7 +668,65 @@
         },
         "why": "price/variations/in_stock"
       }
-    ]
+    ],
+    "images_attached": [
+      {
+        "index": 1,
+        "url": "https://storage-store.plusmember.jp/upload/save_image/01_sakura_05_sakura_6thani_photo_6WtQUsf2_00.jpg",
+        "product_id": "114877",
+        "name": "【通常配送】櫻坂46ランダム生写真(5枚1セット)【「5th YEAR ANNIVERSARY LIVE」オープニング衣装】(直筆サイン入り生写真をランダムで封入)",
+        "mimeType": "image/jpeg",
+        "bytes": 66719
+      },
+      {
+        "index": 2,
+        "url": "https://storage-store.plusmember.jp/upload/save_image/02_sakura_05_sakura_6thani_photo_6WtQUsf2_00.jpg",
+        "product_id": "114878",
+        "name": "【通常配送】櫻坂46ランダム生写真(5枚1セット)【「5th YEAR ANNIVERSARY LIVE」白黒衣装】",
+        "mimeType": "image/jpeg",
+        "bytes": 66116
+      },
+      {
+        "index": 3,
+        "url": "https://storage-store.plusmember.jp/upload/save_image/03_sakura_05_sakura_6thani_photo_6WtQUsf2_0_0.jpg",
+        "product_id": "114879",
+        "name": "【通常配送】櫻坂46ランダム生写真(5枚1セット)【2025年 年末水色衣装】",
+        "mimeType": "image/jpeg",
+        "bytes": 72322
+      },
+      {
+        "index": 4,
+        "url": "https://storage-store.plusmember.jp/upload/save_image/04_sakura_05_sakura_6thani_photo_6WtQUsf2_00.jpg",
+        "product_id": "114880",
+        "name": "【通常配送】櫻坂46ランダム生写真(5枚1セット)【2026年 ハロウィン】",
+        "mimeType": "image/jpeg",
+        "bytes": 70883
+      },
+      {
+        "index": 5,
+        "url": "https://storage-store.plusmember.jp/upload/save_image/05_sakura_05_sakura_6thani_photo_6WtQUsf2_0.jpg",
+        "product_id": "114881",
+        "name": "【通常配送】松田里奈 過去衣装ランダム生写真(4枚1セット)",
+        "mimeType": "image/jpeg",
+        "bytes": 67431
+      },
+      {
+        "index": 6,
+        "url": "https://storage-store.plusmember.jp/upload/save_image/06_sakura_05_sakura_6thani_photo_6WtQUsf2_00.jpg",
+        "product_id": "114882",
+        "name": "【通常配送】松田里奈 櫻坂46 過去生写真(5枚1セット) 全604種",
+        "mimeType": "image/jpeg",
+        "bytes": 74621
+      }
+    ],
+    "images_skipped": [
+      {
+        "url": null,
+        "product_id": null,
+        "reason": "44 more item(s) not attached (max_images 6)"
+      }
+    ],
+    "images_bytes": 418092
   },
   "get_store_product": {
     "product_id": "114889",
@@ -743,7 +801,19 @@
         },
         "why": "how much is left: plenty (>=50) vs exactly N (guest cart probe)"
       }
-    ]
+    ],
+    "images_attached": [
+      {
+        "index": 1,
+        "url": "https://image.emtg.jp/store.emtg.jp/html/upload/save_image/sakura_6thani_logoT_W_6WtQUsf2_00.jpg",
+        "product_id": "114889",
+        "name": "【通常配送】6th Anniversary ロゴTシャツ/ホワイト",
+        "mimeType": "image/jpeg",
+        "bytes": 15467
+      }
+    ],
+    "images_skipped": null,
+    "images_bytes": 15467
   },
   "check_store_stock": {
     "product_id": "114889",

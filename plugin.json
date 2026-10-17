@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "skz46-official",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Look up Sakurazaka46 (櫻坂46) official-site data via the skz46-official MCP tools: news, member blogs (list and full text), the schedule, single formations and centers, discography with track lists, MEET&GREET events with session times, greeting cards, and official special pages (live and single sites), and the official goods store (products, prices, sizes, sold-out status).",
   "author": {
     "name": "Jesse Lai",

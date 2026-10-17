@@ -1,6 +1,6 @@
 {
   "name": "skz46-official-mcp",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Zero-dependency stdio MCP server for Sakurazaka46 (櫻坂46) official-site public data: news, blogs, schedule, formation, discography, MEET&GREET, greeting cards, special pages, goods store.",
   "bin": {
     "skz46-official-mcp": "server/index.js"
